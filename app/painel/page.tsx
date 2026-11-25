@@ -285,7 +285,7 @@ export default function PainelPage() {
 
         {/* Navegação em 3 abas focadas (zero sobrecarga cognitiva) */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-3">
-          <div className="inline-flex rounded-xl border border-rule-strong bg-white p-1">
+          <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-rule-strong bg-white p-1">
             <TabButton
               active={activeTab === "atendimento"}
               onClick={() => setActiveTab("atendimento")}
@@ -323,7 +323,7 @@ export default function PainelPage() {
 
         {/* ===== ABA 1: ATENDIMENTO (FILA DE HANDOFF + BUSCA COMPANION) ===== */}
         {activeTab === "atendimento" && (
-          <section className="grid gap-6 lg:grid-cols-12">
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Fila de Handoff (7 cols) */}
             <div className="space-y-3 lg:col-span-7">
               <h2 className="font-display text-[17px] font-bold text-signage">
@@ -502,7 +502,7 @@ export default function PainelPage() {
 
         {/* ===== ABA 2: PLANTA 2D & ESTOQUE ===== */}
         {activeTab === "planta" && (
-          <section className="grid gap-6 lg:grid-cols-12">
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <StoreMap heatmapCounts={summary.aisleHeatMap} />
             </div>
@@ -545,7 +545,7 @@ export default function PainelPage() {
         {/* ===== ABA 3: DADOS & EVENTOS ===== */}
         {activeTab === "dados" && (
           <section className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-12">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
               <div className="panel p-5 lg:col-span-7">
                 <h2 className="font-display text-[17px] font-bold text-signage">
                   Principais dores coletadas

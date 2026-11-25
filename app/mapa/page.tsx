@@ -193,7 +193,7 @@ function MapaInner() {
       </section>
 
       <main className="container-wide flex-1 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Mapa 2D (7 cols) */}
           <div className="space-y-5 lg:col-span-7">
             <StoreMap

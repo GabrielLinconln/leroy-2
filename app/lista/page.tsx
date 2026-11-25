@@ -412,7 +412,7 @@ function ListaInner() {
       </section>
 
       <main className="container-wide flex-1 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* COLUNA PRINCIPAL (8 cols) */}
           <div className="space-y-4 lg:col-span-8">
             {/* Barra enxuta: Nível de orçamento (segmented control) + Abas */}

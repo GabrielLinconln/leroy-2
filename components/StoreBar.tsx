@@ -103,16 +103,19 @@ export function StoreBar() {
             })}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {/* Seletor customizado de unidade (zero seta dupla de navegador!) */}
-            <div ref={menuRef} className="relative">
+            <div ref={menuRef} className="relative min-w-0">
               <button
                 type="button"
                 onClick={() => setStoreMenuOpen((v) => !v)}
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[11.5px] font-medium text-white transition hover:border-leroy/70"
+                aria-haspopup="listbox"
+                aria-expanded={storeMenuOpen}
+                aria-label={`Loja: ${activeStore.shortName}. Trocar de loja`}
+                className="inline-flex h-8 max-w-full items-center gap-2 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[11.5px] font-medium text-white transition hover:border-leroy/70"
               >
                 <StoreIcon size={13} className="text-leroy" />
-                <span className="max-w-[125px] truncate sm:max-w-[165px]">
+                <span className="min-w-0 max-w-[125px] truncate sm:max-w-[165px]">
                   {activeStore.shortName}
                 </span>
                 <svg
