@@ -140,6 +140,29 @@ export type CopilotReplyPayload = {
  * Suporta múltiplos domínios, cálculo dinâmico de medidas, busca semântica aberta
  * e abertura real de ticket de Handoff Humano com resumo da conversa.
  */
+export const RISKS = ["nenhum", "eletrica", "gas", "estrutura", "altura"] as const;
+export type Risk = (typeof RISKS)[number];
+
+// Regras de dominio aplicadas no codigo, independentes do modelo.
+const RISK_PATTERNS: Array<[Risk, RegExp]> = [
+  ["gas", /\bgas\b|botijao|fogao|aquecedor a gas/],
+  ["eletrica", /chuveiro|tomada|disjuntor|fiacao|\bfios?\b|choque|interruptor|resistencia|eletric|lampada|plafon/],
+  ["estrutura", /viga|pilar|\blaje\b|estrutural|derrubar parede|rachadura grande|trinca grande/],
+  ["altura", /telhado|forro|andaime|fachada|escada alta/],
+];
+
+export const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
+  gas: "**Gás não é serviço para fazer sozinho.** Se sentir cheiro, feche o registro, abra as janelas, não acione interruptores e chame a distribuidora ou um técnico credenciado.",
+  eletrica: "**Segurança:** desligue o disjuntor do circuito e confirme com a chave de teste antes de mexer. Fio derretido, cheiro de queimado ou disjuntor desarmando de novo pedem um eletricista.",
+  estrutura: "**Segurança:** trinca larga, em diagonal ou que volta pode ser estrutural. Antes de esconder com massa, vale a avaliação de um engenheiro.",
+  altura: "**Segurança:** trabalho em altura pede escada firme e alguém junto. Acima de 2 m, prefira um profissional.",
+};
+
+export function detectRisk(message: string): Risk {
+  const n = normalizeText(message);
+  return RISK_PATTERNS.find(([, re]) => re.test(n))?.[0] ?? "nenhum";
+}
+
 export function processCopilotMessage(
   rawInput: string,
   context: ChatContext
@@ -156,9 +179,13 @@ export function processCopilotMessage(
   };
 
   // Atalho global: chamar vendedor especialista a qualquer momento
-  if (/(chamar|falar com|preciso de|quero um).*(vendedor|especialista|atendente|humano|tecnico|eletricista|encanador|pessoa)|^chamar vendedor$|^falar com especialista$/.test(n)) {
+  if (/\b(chama|chamar|falar com|preciso de|quero um)\b.*(vendedor|especialista|atendente|humano|tecnico|eletricista|encanador|pessoa|alguem)|^chamar vendedor$|^falar com especialista$/.test(n)) {
     const dept: Department =
-      newCtx.intent === "torneira"
+      /eletric/.test(n)
+        ? "Elétrica"
+        : /hidraul|encanador/.test(n)
+        ? "Hidráulica"
+        : newCtx.intent === "torneira"
         ? "Hidráulica"
         : newCtx.intent === "pintura"
         ? "Tintas"
@@ -180,6 +207,16 @@ export function processCopilotMessage(
         handoffTicket: ticket,
         suggestions: ["Resolver outro projeto", "Ver catálogo da loja"],
       },
+      newContext: newCtx,
+    };
+  }
+
+  // Gas nunca vira lista de compras, em nenhuma etapa da conversa.
+  if (detectRisk(input) === "gas") {
+    newCtx.step = "start";
+    return {
+      painTopic: "Gás",
+      response: { text: SAFETY_NOTES.gas, suggestions: ["Chamar especialista", "Resolver outro projeto"] },
       newContext: newCtx,
     };
   }

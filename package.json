@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"lib/**/*.test.ts\"",
+    "eval": "tsx scripts/eval.ts",
     "check": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {

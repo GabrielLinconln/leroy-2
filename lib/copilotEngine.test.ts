@@ -29,3 +29,12 @@ test("pedir tecnico de eletrica abre chamado, nao lista de faca-voce-mesmo", () 
   assert.equal(r.response.actionProject, undefined);
   assert.equal(r.response.handoffTicket?.category, "Elétrica");
 });
+
+test("gas nunca vira lista, nem no meio de outro fluxo", () => {
+  const ctx = { ...INITIAL_CONTEXT, storeId: "es-vitoria", step: "torneira:onde" as const };
+  for (const q of ["cheiro de gás no fogão", "vazamento de gás embaixo da pia", "trocar mangueira do botijão"]) {
+    const r = processCopilotMessage(q, ctx);
+    assert.equal(r.response.actionProject, undefined, q);
+    assert.match(r.response.text, /Gás não é serviço/, q);
+  }
+});

@@ -4,6 +4,10 @@ import {
   createHandoffTicket,
   formatTotal,
   type CopilotReplyPayload,
+  RISKS,
+  SAFETY_NOTES,
+  detectRisk,
+  type Risk,
 } from "./copilotEngine";
 import { CHAT_MODEL, generateJson } from "./llm";
 import { ALL_PRESET_IDS, buildPaintingProject, getPresetProject } from "./projects";
@@ -15,13 +19,11 @@ import { corridorOf } from "./storeMap";
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 
 const ACTIONS = ["answer", "preset_project", "paint_project", "product_list", "handoff", "out_of_scope"] as const;
-export const RISKS = ["nenhum", "eletrica", "gas", "estrutura", "altura"] as const;
 export const DEPARTMENTS: Department[] = [
   "Hidráulica", "Tintas", "Ferramentas", "Fixação", "Elétrica", "Materiais Básicos", "Limpeza",
 ];
 export const PRODUCT_IDS = CATALOG.map((p) => p.id);
 
-export type Risk = (typeof RISKS)[number];
 
 export type LlmDecision = {
   reply: string;
@@ -86,28 +88,8 @@ Regras:
 
 ${CATALOG_PROMPT}`;
 
-// Regras de dominio aplicadas no codigo, independentes do modelo.
-const RISK_PATTERNS: Array<[Risk, RegExp]> = [
-  ["gas", /\bgas\b|botijao|fogao|aquecedor a gas/],
-  ["eletrica", /chuveiro|tomada|disjuntor|fiacao|\bfios?\b|choque|interruptor|resistencia|eletric|lampada|plafon/],
-  ["estrutura", /viga|pilar|\blaje\b|estrutural|derrubar parede|rachadura grande|trinca grande/],
-  ["altura", /telhado|forro|andaime|fachada|escada alta/],
-];
-
-export const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
-  gas: "**Gás não é serviço para fazer sozinho.** Se sentir cheiro, feche o registro, abra as janelas, não acione interruptores e chame a distribuidora ou um técnico credenciado.",
-  eletrica: "**Segurança:** desligue o disjuntor do circuito e confirme com a chave de teste antes de mexer. Fio derretido, cheiro de queimado ou disjuntor desarmando de novo pedem um eletricista.",
-  estrutura: "**Segurança:** trinca larga, em diagonal ou que volta pode ser estrutural. Antes de esconder com massa, vale a avaliação de um engenheiro.",
-  altura: "**Segurança:** trabalho em altura pede escada firme e alguém junto. Acima de 2 m, prefira um profissional.",
-};
-
 const HANDOFF_SUGGESTION = "Chamar especialista";
 const MAX_REPLY = 700;
-
-export function detectRisk(message: string): Risk {
-  const n = normalizeText(message);
-  return RISK_PATTERNS.find(([, re]) => re.test(n))?.[0] ?? "nenhum";
-}
 
 export function cleanText(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";

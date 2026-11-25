@@ -1,12 +1,9 @@
-import { buildProductListProject } from "./copilotEngine";
+import { RISKS, SAFETY_NOTES, buildProductListProject, detectRisk } from "./copilotEngine";
 import {
   CATALOG_PROMPT,
   DEPARTMENTS,
   PRODUCT_IDS,
-  RISKS,
-  SAFETY_NOTES,
   cleanText,
-  detectRisk,
 } from "./copilotLlm";
 import { VISION_MODEL, generateJson } from "./llm";
 import { ALL_PRESET_IDS, getPresetProject } from "./projects";

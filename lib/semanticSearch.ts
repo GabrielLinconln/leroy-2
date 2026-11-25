@@ -13,6 +13,7 @@ const STOPWORDS = new Set([
   "em", "no", "na", "nos", "nas", "para", "pra", "por", "com", "sem", "que", "esta",
   "ta", "tá", "meu", "minha", "quero", "preciso", "como", "fazer", "arrumar", "consertar",
   "resolver", "muito", "mais", "menos", "aqui", "loja", "onde", "tem", "qual", "e", "ou",
+  "sala", "cozinha", "banheiro", "casa",
 ]);
 
 const SEMANTIC_SYNONYMS: Record<string, string[]> = {
@@ -154,7 +155,7 @@ function scoreProduct(
 
     // Typo tolerance via trigrams against tags (tokens curtos geravam ruido)
     for (const tag of normTags) {
-      if (qt.length >= 5 && tag !== qt && trigramSimilarity(qt, tag) >= 0.55) {
+      if (qt.length >= 5 && tag.length >= 5 && tag !== qt && trigramSimilarity(qt, tag) >= 0.55) {
         rawScore += 9;
         matched.add(tag);
       }
@@ -223,7 +224,7 @@ export function semanticSearchCatalog(
     if (syns) syns.forEach((s) => expandedTokens.add(s));
     // Partial prefix match against synonym keys
     for (const [key, vals] of Object.entries(SEMANTIC_SYNONYMS)) {
-      if (t.length >= 4 && (key.startsWith(t) || t.startsWith(key))) {
+      if (t.length >= 4 && key.length >= 4 && (key.startsWith(t) || t.startsWith(key))) {
         vals.forEach((s) => expandedTokens.add(s));
       }
     }
