@@ -155,7 +155,7 @@ export function processCopilotMessage(
   };
 
   // Atalho global: chamar vendedor especialista a qualquer momento
-  if (/(chamar|falar com|preciso de|quero um).*(vendedor|especialista|atendente|humano)|^chamar vendedor$|^falar com especialista$/.test(n)) {
+  if (/(chamar|falar com|preciso de|quero um).*(vendedor|especialista|atendente|humano|tecnico|eletricista|encanador|pessoa)|^chamar vendedor$|^falar com especialista$/.test(n)) {
     const dept: Department =
       newCtx.intent === "torneira"
         ? "Hidráulica"
@@ -184,7 +184,7 @@ export function processCopilotMessage(
   }
 
   // Reinício explícito
-  if (/^(outro projeto|resolver outro|comecar de novo|novo projeto|voltar ao inicio)$/.test(n)) {
+  if (/^(resolver outro( projeto)?|outro projeto|comecar de novo|novo projeto|voltar ao inicio)$/.test(n)) {
     newCtx.step = "start";
     newCtx.intent = null;
     newCtx.details = {};
@@ -380,6 +380,21 @@ export function processCopilotMessage(
           project.calculationNote
         } Já incluí rolo antigotas, trincha, fita crepe, lona e lixa com rota otimizada na loja.`,
         actionProject: project,
+      },
+      newContext: newCtx,
+    };
+  }
+
+  // Oferecido depois do chamado de trinca grande.
+  if (/lista preventiva/.test(n)) {
+    const project = getPresetProject("reparo-trinca", storeId)!;
+    newCtx.step = "start";
+    return {
+      painTopic: "Trinca / Infiltração",
+      response: {
+        text: `Esta é a lista do reparo superficial (**${formatTotal(project)}**). Use só depois da avaliação do especialista: se a trinca for estrutural, a massa esconde o problema.`,
+        actionProject: project,
+        suggestions: ["Resolver outro projeto"],
       },
       newContext: newCtx,
     };

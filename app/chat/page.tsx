@@ -130,6 +130,13 @@ function ChatInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
+  // Chips que sao acoes de tela, nao mensagens (vindos do motor local ou do modelo).
+  function handleSuggestion(text: string) {
+    if (/\bfotos?\b/i.test(text)) setVisionOpen(true);
+    else if (/cat[aá]logo/i.test(text)) router.push("/catalogo");
+    else sendMessage(text);
+  }
+
   async function sendMessage(text: string, viaVoice = false) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -502,7 +509,7 @@ function ChatInner() {
                     <button
                       key={sug}
                       type="button"
-                      onClick={() => sendMessage(sug)}
+                      onClick={() => handleSuggestion(sug)}
                       disabled={loading}
                       className="chip"
                     >
