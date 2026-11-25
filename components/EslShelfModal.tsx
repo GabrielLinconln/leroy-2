@@ -6,6 +6,7 @@ import { ProductThumb } from "./ProductThumb";
 import { buildEslPlanogram } from "@/lib/eslPlanogram";
 import { trackEvent } from "@/lib/telemetry";
 import { ProjectItem } from "@/lib/types";
+import { corridorOf } from "@/lib/storeMap";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -71,7 +72,7 @@ export function EslTagCard({
             }`}
           />
           <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-eink-ink">
-            ESL · {aisle}
+            ESL · {corridorOf(aisle)}
           </span>
         </div>
 
@@ -203,7 +204,7 @@ export function EslShelfModal({
                 ESL Pick-to-Light · Último Metro Ativo
               </div>
               <div className="font-display text-[15px] font-bold text-white">
-                Corredor {planogram.aisle} · {planogram.moduleLabel}
+                Corredor {corridorOf(planogram.aisle)} · {planogram.moduleLabel}
               </div>
             </div>
           </div>
@@ -251,7 +252,7 @@ export function EslShelfModal({
           {/* Planograma metálico da gôndola com foto real de cada SKU */}
           <div className="mt-3 space-y-2 rounded-xl border-2 border-signage bg-[#202428] p-3">
             <div className="flex items-center justify-between px-1 font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/60">
-              <span>Gôndola {planogram.aisle} · {planogram.moduleLabel}</span>
+              <span>Gôndola {corridorOf(planogram.aisle)} · {planogram.moduleLabel}</span>
               <span>Etiquetas Eletrônicas E-Ink (BLE)</span>
             </div>
 

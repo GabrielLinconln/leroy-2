@@ -29,6 +29,7 @@ import {
   trackEvent,
 } from "@/lib/telemetry";
 import { ChatContext, ChatMessage, DynamicProjectList, VisionAnalysisResult } from "@/lib/types";
+import { corridorOf } from "@/lib/storeMap";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -421,7 +422,7 @@ function ChatInner() {
                         </span>
 
                         {Array.from(
-                          new Set(msg.actionProject.items.map((i) => i.aisle))
+                          new Set(msg.actionProject.items.map((i) => i.corridorCode))
                         ).map((aisle) => (
                           <span key={aisle} className="aisle-plate">
                             {aisle}
@@ -476,7 +477,7 @@ function ChatInner() {
                         </div>
                         <div className="text-right">
                           <span className="aisle-plate">
-                            CORR. {msg.handoffTicket.aisle}
+                            CORR. {corridorOf(msg.handoffTicket.aisle)}
                           </span>
                           <div className="mt-0.5 font-mono text-[10.5px] font-semibold text-signage-muted">
                             ETA ~{msg.handoffTicket.etaMinutes} min

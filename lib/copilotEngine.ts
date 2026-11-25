@@ -8,6 +8,7 @@ import {
   DynamicProjectList,
   HandoffTicket,
 } from "./types";
+import { corridorOf } from "./storeMap";
 
 export const INITIAL_CONTEXT: ChatContext = {
   step: "start",
@@ -175,7 +176,7 @@ export function processCopilotMessage(
     return {
       painTopic: "Handoff Especialista",
       response: {
-        text: `Combinado! Acionei **${ticket.specialistName}** (${ticket.specialistRole}), que está próximo ao corredor **${ticket.aisle}**.\n\nO resumo da nossa conversa já apareceu no painel dele (ticket **${ticket.id}**) — assim você não precisa repetir nada.`,
+        text: `Combinado! Acionei **${ticket.specialistName}** (${ticket.specialistRole}), que está próximo ao corredor **${corridorOf(ticket.aisle)}**.\n\nO resumo da nossa conversa já apareceu no painel dele (ticket **${ticket.id}**) — assim você não precisa repetir nada.`,
         handoffTicket: ticket,
         suggestions: ["Resolver outro projeto", "Ver catálogo da loja"],
       },
@@ -414,7 +415,7 @@ export function processCopilotMessage(
       return {
         painTopic: "Trinca / Infiltração",
         response: {
-          text: `Trincas maiores que 30cm ou profundas pedem avaliação técnica para não mascarar infiltração ou movimentação estrutural.\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${ticket.aisle}**) com o resumo da nossa conversa (ticket **${ticket.id}**).`,
+          text: `Trincas maiores que 30cm ou profundas pedem avaliação técnica para não mascarar infiltração ou movimentação estrutural.\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${corridorOf(ticket.aisle)}**) com o resumo da nossa conversa (ticket **${ticket.id}**).`,
           handoffTicket: ticket,
           suggestions: ["Ver lista preventiva mesmo assim", "Resolver outro projeto"],
         },
@@ -473,7 +474,7 @@ export function processCopilotMessage(
       return {
         painTopic: "Elétrica / Chuveiro",
         response: {
-          text: `Segurança em primeiro lugar! Quando há aquecimento de fio ou queda recorrente do disjuntor, nosso técnico precisa dimensionar cabo e amperagem.\n\nChamei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${ticket.aisle}**) — ticket **${ticket.id}**.`,
+          text: `Segurança em primeiro lugar! Quando há aquecimento de fio ou queda recorrente do disjuntor, nosso técnico precisa dimensionar cabo e amperagem.\n\nChamei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${corridorOf(ticket.aisle)}**) — ticket **${ticket.id}**.`,
           handoffTicket: ticket,
         },
         newContext: newCtx,
@@ -693,7 +694,7 @@ export function processCopilotMessage(
 
     const topNames = matches
       .slice(0, 3)
-      .map((m) => `• **${m.product.name}** — corredor **${m.product.aisle}** (${m.inStock ? `${m.stockQty} un.` : "sem estoque"})`)
+      .map((m) => `• **${m.product.name}** — corredor **${m.product.corridorCode}** (${m.inStock ? `${m.stockQty} un.` : "sem estoque"})`)
       .join("\n");
 
     return {

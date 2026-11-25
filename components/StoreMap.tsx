@@ -399,7 +399,7 @@ export function StoreMap({
                   >
                     {isSpecial
                       ? a.shortLabel.toUpperCase()
-                      : `${a.id} · ${a.corridorNumber ?? ""}`}
+                      : a.corridorNumber ?? a.id}
                   </text>
 
                   {!isSpecial && (

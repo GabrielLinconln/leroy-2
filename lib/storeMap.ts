@@ -196,7 +196,7 @@ export const AISLES: Aisle[] = [
   {
     id: "H1",
     corridorNumber: "C03",
-    label: "H1 (C03) · Torneiras & Metais Sensea",
+    label: "Corredor C03 · Torneiras & Metais Sensea",
     shortLabel: "Torneiras",
     department: "Hidráulica",
     x: 30,
@@ -209,7 +209,7 @@ export const AISLES: Aisle[] = [
   {
     id: "H2",
     corridorNumber: "C04",
-    label: "H2 (C04) · Tubos, Sifões & Engates Tigre",
+    label: "Corredor C04 · Tubos, Sifões & Engates Tigre",
     shortLabel: "Tubos/Sifões",
     department: "Hidráulica",
     x: 30,
@@ -222,7 +222,7 @@ export const AISLES: Aisle[] = [
   {
     id: "H3",
     corridorNumber: "C05",
-    label: "H3 (C05) · Vedação & Reparos Blukit",
+    label: "Corredor C05 · Vedação & Reparos Blukit",
     shortLabel: "Vedação",
     department: "Hidráulica",
     x: 30,
@@ -237,7 +237,7 @@ export const AISLES: Aisle[] = [
   {
     id: "T1",
     corridorNumber: "C08",
-    label: "T1 (C08) · Acessórios Pintura Dexter",
+    label: "Corredor C08 · Acessórios Pintura Dexter",
     shortLabel: "Acessórios",
     department: "Tintas",
     x: 60,
@@ -250,7 +250,7 @@ export const AISLES: Aisle[] = [
   {
     id: "T2",
     corridorNumber: "C09",
-    label: "T2 (C09) · Tintas Luxens & Suvinil",
+    label: "Corredor C09 · Tintas Luxens & Suvinil",
     shortLabel: "Tintas",
     department: "Tintas",
     x: 60,
@@ -263,7 +263,7 @@ export const AISLES: Aisle[] = [
   {
     id: "T3",
     corridorNumber: "C10",
-    label: "T3 (C10) · Seladores & Preparação",
+    label: "Corredor C10 · Seladores & Preparação",
     shortLabel: "Seladores",
     department: "Tintas",
     x: 60,
@@ -278,7 +278,7 @@ export const AISLES: Aisle[] = [
   {
     id: "F1",
     corridorNumber: "C14",
-    label: "F1 (C14) · Ferramentas Manuais Dexter",
+    label: "Corredor C14 · Ferramentas Manuais Dexter",
     shortLabel: "Manuais",
     department: "Ferramentas",
     x: 90,
@@ -291,7 +291,7 @@ export const AISLES: Aisle[] = [
   {
     id: "F2",
     corridorNumber: "C15",
-    label: "F2 (C15) · Furadeiras & Brocas Dexter",
+    label: "Corredor C15 · Furadeiras & Brocas Dexter",
     shortLabel: "Elétricas",
     department: "Ferramentas",
     x: 90,
@@ -304,7 +304,7 @@ export const AISLES: Aisle[] = [
   {
     id: "F3",
     corridorNumber: "C16",
-    label: "F3 (C16) · Buchas Standers & Spaceo",
+    label: "Corredor C16 · Buchas Standers & Spaceo",
     shortLabel: "Fixação",
     department: "Fixação",
     x: 90,
@@ -319,7 +319,7 @@ export const AISLES: Aisle[] = [
   {
     id: "E1",
     corridorNumber: "C19",
-    label: "E1 (C19) · Chuveiros Lorenzetti & Wago",
+    label: "Corredor C19 · Chuveiros Lorenzetti & Wago",
     shortLabel: "Elétrica",
     department: "Elétrica",
     x: 120,
@@ -332,7 +332,7 @@ export const AISLES: Aisle[] = [
   {
     id: "E2",
     corridorNumber: "C20",
-    label: "E2 (C20) · Showroom Iluminação Inspire",
+    label: "Corredor C20 · Showroom Iluminação Inspire",
     shortLabel: "Iluminação",
     department: "Elétrica",
     x: 120,
@@ -345,7 +345,7 @@ export const AISLES: Aisle[] = [
   {
     id: "L2",
     corridorNumber: "C21",
-    label: "L2 (C21) · Limpeza, Mofo & EPIs",
+    label: "Corredor C21 · Limpeza, Mofo & EPIs",
     shortLabel: "Limpeza",
     department: "Limpeza",
     x: 120,
@@ -360,7 +360,7 @@ export const AISLES: Aisle[] = [
   {
     id: "M4",
     corridorNumber: "C24",
-    label: "M4 (C24) · Materiais Básicos Axton & Obra",
+    label: "Corredor C24 · Materiais Básicos Axton & Obra",
     shortLabel: "Obra/Axton",
     department: "Materiais Básicos",
     x: 145.5,
@@ -374,6 +374,11 @@ export const AISLES: Aisle[] = [
 
 export function getAisleById(id: string): Aisle | undefined {
   return AISLES.find((a) => a.id === id);
+}
+
+/** Codigo da placa do corredor (C05); o id do setor (H3) fica interno. */
+export function corridorOf(aisleId: string): string {
+  return getAisleById(aisleId)?.corridorNumber ?? aisleId;
 }
 
 /**

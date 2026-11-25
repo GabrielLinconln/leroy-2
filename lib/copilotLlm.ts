@@ -10,6 +10,7 @@ import { ALL_PRESET_IDS, buildPaintingProject, getPresetProject } from "./projec
 import { normalizeText } from "./semanticSearch";
 import { DEFAULT_STORE_ID } from "./stores";
 import type { ChatContext, Department } from "./types";
+import { corridorOf } from "./storeMap";
 
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 
@@ -193,7 +194,7 @@ export function buildReply(
     return {
       painTopic: "Handoff Especialista",
       response: {
-        text: `${decision.reply}\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}), perto do corredor **${ticket.aisle}**. O resumo da conversa já está no tablet dele (chamado **${ticket.id}**).`,
+        text: `${decision.reply}\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}), perto do corredor **${corridorOf(ticket.aisle)}**. O resumo da conversa já está no tablet dele (chamado **${ticket.id}**).`,
         handoffTicket: ticket,
         suggestions: suggestions.filter((s) => s !== HANDOFF_SUGGESTION),
       },

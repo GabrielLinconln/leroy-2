@@ -93,7 +93,7 @@ function analyzeResolved(params: {
           detectedItem: `${top.name}`,
           confidence: TEXT_ONLY_CONFIDENCE,
           category: top.category,
-          technicalTranslation: `Identificado em ${top.category} (${top.aisle} / ${top.corridorCode} · ${top.shelfLocation}).`,
+          technicalTranslation: `Identificado em ${top.category} (Corredor ${top.corridorCode} · ${top.shelfLocation}).`,
           diagnosis: `Com base na foto enviada e na descrição "${params.caption || params.fileName}", o item compatível na unidade é ${top.name}.`,
           recommendedAction: "Confira os equivalentes ou abra a lista com rota guiada.",
           suggestedPrompt: top.name,

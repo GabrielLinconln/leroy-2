@@ -33,6 +33,7 @@ import {
   HandoffTicket,
   HandoffTicketStatus,
 } from "@/lib/types";
+import { corridorOf } from "@/lib/storeMap";
 
 type PanelTab = "atendimento" | "planta" | "dados";
 
@@ -340,7 +341,7 @@ export default function PainelPage() {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="aisle-plate">{ticket.aisle}</span>
+                        <span className="aisle-plate">{corridorOf(ticket.aisle)}</span>
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.badgeClass}`}
                         >
@@ -666,7 +667,7 @@ export default function PainelPage() {
                         <td className="py-2.5 pr-4 text-signage">{ev.label}</td>
                         <td className="whitespace-nowrap py-2.5 pr-4">
                           {ev.aisle ? (
-                            <span className="aisle-plate">{ev.aisle}</span>
+                            <span className="aisle-plate">{corridorOf(ev.aisle)}</span>
                           ) : (
                             <span className="text-signage-subtle">—</span>
                           )}

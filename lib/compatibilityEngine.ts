@@ -34,7 +34,7 @@ export function auditProjectCompatibility(
         severity: "critical",
         title: `Item sem estoque nesta loja: ${item.name}`,
         explanation: item.substituteName
-          ? `Evite andar até o corredor ${item.aisle} à toa. Há substituto equivalente em estoque (${item.substituteName}, ${item.substituteStockQty} un.).`
+          ? `Evite andar até o corredor ${item.corridorCode} à toa. Há substituto equivalente em estoque (${item.substituteName}, ${item.substituteStockQty} un.).`
           : `Este item está esgotado nesta unidade. Troque de loja no topo ou consulte um especialista.`,
         fixLabel: item.substituteName ? `Substituir por ${item.substituteName.split(" ").slice(0, 3).join(" ")}` : undefined,
         fixType: item.substituteId ? "replace_product" : undefined,

@@ -52,7 +52,7 @@ export function ProductDetailModal({
             className="!aspect-[16/10] max-h-[245px]"
           />
           <span className="aisle-plate absolute left-3 top-3 shadow-sm">
-            {product.corridorCode} · {product.aisle}
+            Corredor {product.corridorCode}
           </span>
           <button
             type="button"
@@ -117,7 +117,7 @@ export function ProductDetailModal({
                 Onde encontrar ({storeName})
               </div>
               <div className="mt-1 text-[13px] font-bold text-signage">
-                Corredor {product.corridorCode} · Setor {product.aisle}
+                Corredor {product.corridorCode}
               </div>
               <div className="text-[12px] text-signage-muted">
                 {product.shelfLocation}
