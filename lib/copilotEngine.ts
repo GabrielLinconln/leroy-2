@@ -17,7 +17,7 @@ export const INITIAL_CONTEXT: ChatContext = {
   history: [],
 };
 
-function createHandoffTicket(
+export function createHandoffTicket(
   storeId: string,
   department: Department,
   pain: string,
@@ -25,7 +25,8 @@ function createHandoffTicket(
   complexity: "Alta" | "Média" = "Alta"
 ): HandoffTicket {
   const specialist = getSpecialistForDepartment(storeId, department);
-  const shortId = `LM-${Math.floor(1000 + Math.random() * 9000)}`;
+  // 4 digitos aleatorios colidiam com poucas dezenas de chamados no painel
+  const shortId = `LM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const highlights = history.slice(-4);
   return {
     id: shortId,
@@ -80,11 +81,49 @@ function detectFinish(input: string): "fosco" | "acetinado" {
   return "fosco";
 }
 
-function formatTotal(project: DynamicProjectList): string {
+export function formatTotal(project: DynamicProjectList): string {
   const sum = project.items
     .filter((i) => !i.optional)
     .reduce((acc, i) => acc + i.price * i.quantity, 0);
   return sum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export function buildProductListProject(
+  storeId: string,
+  query: string,
+  specs: Array<{ productId: string; reason?: string }>,
+  sourceIntent: string
+): DynamicProjectList {
+  const items = materializeProjectItems(
+    specs.map((spec) => ({ ...spec, quantity: 1 })),
+    storeId
+  );
+  return {
+    id: `custom-${crypto.randomUUID().slice(0, 8)}`,
+    title: `Seleção para "${query.slice(0, 36)}${query.length > 36 ? "…" : ""}"`,
+    subtitle: `${items.length} produtos encontrados no catálogo da loja`,
+    description: `Traduzi sua busca em linguagem natural para os itens técnicos correspondentes no catálogo da loja, já com corredor, prateleira e estoque ao vivo.`,
+    storeId,
+    difficulty: "Fácil",
+    estimatedInstallMin: 20,
+    sourceIntent,
+    items,
+    tutorial: [
+        {
+          step: 1,
+          title: "Confira as medidas e especificações na prateleira",
+          detail: "Use a localização exata de corredor e módulo na lista para comparar bitolas, voltagem ou rendimento na embalagem.",
+          durationMin: 3,
+        },
+        {
+          step: 2,
+          title: "Se precisar de apoio técnico, chame um especialista",
+          detail: "Em qualquer momento do chat você pode clicar em 'Chamar especialista' e levar seu resumo direto ao atendente do setor.",
+          durationMin: 2,
+        },
+      ],
+    createdAt: Date.now(),
+  };
 }
 
 export type CopilotReplyPayload = {
@@ -625,40 +664,15 @@ export function processCopilotMessage(
   // ================= BUSCA SEMÂNTICA ABERTA (QUALQUER OUTRA PERGUNTA) =================
   const matches = semanticSearchCatalog(input, storeId, { limit: 4 });
   if (matches.length > 0) {
-    const dynamicId = `custom-${Date.now().toString(36)}`;
-    const customProject: DynamicProjectList = {
-      id: dynamicId,
-      title: `Seleção para "${input.slice(0, 36)}${input.length > 36 ? "…" : ""}"`,
-      subtitle: `${matches.length} produtos encontrados por busca semântica`,
-      description: `Traduzi sua busca em linguagem natural para os itens técnicos correspondentes no catálogo da loja, já com corredor, prateleira e estoque ao vivo.`,
+    const customProject = buildProductListProject(
       storeId,
-      difficulty: "Fácil",
-      estimatedInstallMin: 20,
-      sourceIntent: "busca-semantica",
-      items: materializeProjectItems(
-        matches.map((m) => ({
-          productId: m.product.id,
-          quantity: 1,
-          reason: `Correspondência semântica ${m.score}% (${m.matchedTerms.slice(0, 2).join(", ")})`,
-        })),
-        storeId
-      ),
-      tutorial: [
-        {
-          step: 1,
-          title: "Confira as medidas e especificações na prateleira",
-          detail: "Use a localização exata de corredor e módulo na lista para comparar bitolas, voltagem ou rendimento na embalagem.",
-          durationMin: 3,
-        },
-        {
-          step: 2,
-          title: "Se precisar de apoio técnico, chame um especialista",
-          detail: "Em qualquer momento do chat você pode clicar em 'Chamar especialista' e levar seu resumo direto ao atendente do setor.",
-          durationMin: 2,
-        },
-      ],
-      createdAt: Date.now(),
-    };
+      input,
+      matches.map((m) => ({
+        productId: m.product.id,
+        reason: `Correspondência semântica ${m.score}% (${m.matchedTerms.slice(0, 2).join(", ")})`,
+      })),
+      "busca-semantica"
+    );
 
     const topNames = matches
       .slice(0, 3)

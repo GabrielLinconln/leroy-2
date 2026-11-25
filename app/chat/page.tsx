@@ -154,9 +154,11 @@ function ChatInner() {
           message: trimmed,
           context: { ...context, storeId: currentStore },
           storeId: currentStore,
+          history: messages.slice(-8).map(({ role, text }) => ({ role, text })),
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const reply = data.response as Omit<ChatMessage, "id" | "role" | "timestamp">;
 
       if (reply.actionProject) {
@@ -549,6 +551,8 @@ function ChatInner() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              maxLength={500}
+              aria-label="Mensagem para o copiloto"
               placeholder="Fale ou digite o problema (ex: pintar quarto 4x5m, torneira pingando)…"
               disabled={loading}
               className="h-10 flex-1 rounded-lg border border-rule-strong bg-floor px-3.5 text-[13.5px] text-signage outline-none transition placeholder:text-signage-subtle focus:border-signage focus:bg-white"
