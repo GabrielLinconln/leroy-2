@@ -14,13 +14,13 @@ import type { ChatContext, Department } from "./types";
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 
 const ACTIONS = ["answer", "preset_project", "paint_project", "product_list", "handoff", "out_of_scope"] as const;
-const RISKS = ["nenhum", "eletrica", "gas", "estrutura", "altura"] as const;
-const DEPARTMENTS: Department[] = [
+export const RISKS = ["nenhum", "eletrica", "gas", "estrutura", "altura"] as const;
+export const DEPARTMENTS: Department[] = [
   "Hidráulica", "Tintas", "Ferramentas", "Fixação", "Elétrica", "Materiais Básicos", "Limpeza",
 ];
-const PRODUCT_IDS = CATALOG.map((p) => p.id);
+export const PRODUCT_IDS = CATALOG.map((p) => p.id);
 
-type Risk = (typeof RISKS)[number];
+export type Risk = (typeof RISKS)[number];
 
 export type LlmDecision = {
   reply: string;
@@ -60,10 +60,11 @@ export const DECISION_SCHEMA = {
   required: ["reply", "action", "risk", "suggestions", "productIds"],
 } as const;
 
-const PRESET_LINES = ALL_PRESET_IDS.map((id) => `- ${id}: ${getPresetProject(id)?.title ?? id}`).join("\n");
-const CATALOG_LINES = CATALOG.map(
-  (p) => `- ${p.id} | ${p.name} | ${p.category} | ${p.laymanTerms.join("; ")}`
-).join("\n");
+export const CATALOG_PROMPT = `PROJETOS PRONTOS (presetProjectId: título):
+${ALL_PRESET_IDS.map((id) => `- ${id}: ${getPresetProject(id)?.title ?? id}`).join("\n")}
+
+CATÁLOGO (id | produto | departamento | como o cliente costuma chamar):
+${CATALOG.map((p) => `- ${p.id} | ${p.name} | ${p.category} | ${p.laymanTerms.join("; ")}`).join("\n")}`;
 
 const SYSTEM_INSTRUCTION = `Você é o LM Copiloto, assistente de autoatendimento dentro de uma loja Leroy Merlin no Brasil. O cliente está no corredor, pelo celular, e descreve o problema como leigo ("borrachinha da torneira", "cano embaixo da pia").
 
@@ -80,11 +81,7 @@ Regras:
 8. Português do Brasil, simples, até 3 frases curtas. Pode usar **negrito** no nome da peça. Sem emojis.
 9. suggestions: até 3 falas curtas que o cliente provavelmente vai tocar a seguir, escritas como se fosse ele falando.
 
-PROJETOS PRONTOS (presetProjectId: título):
-${PRESET_LINES}
-
-CATÁLOGO (id | produto | departamento | como o cliente costuma chamar):
-${CATALOG_LINES}`;
+${CATALOG_PROMPT}`;
 
 // Regras de dominio aplicadas no codigo, independentes do modelo.
 const RISK_PATTERNS: Array<[Risk, RegExp]> = [
@@ -94,7 +91,7 @@ const RISK_PATTERNS: Array<[Risk, RegExp]> = [
   ["altura", /telhado|forro|andaime|fachada|escada alta/],
 ];
 
-const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
+export const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
   gas: "**Gás não é serviço para fazer sozinho.** Se sentir cheiro, feche o registro, abra as janelas, não acione interruptores e chame a distribuidora ou um técnico credenciado.",
   eletrica: "**Segurança:** desligue o disjuntor do circuito e confirme com a chave de teste antes de mexer. Fio derretido, cheiro de queimado ou disjuntor desarmando de novo pedem um eletricista.",
   estrutura: "**Segurança:** trinca larga, em diagonal ou que volta pode ser estrutural. Antes de esconder com massa, vale a avaliação de um engenheiro.",
@@ -104,12 +101,12 @@ const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
 const HANDOFF_SUGGESTION = "Chamar especialista";
 const MAX_REPLY = 700;
 
-function detectRisk(message: string): Risk {
+export function detectRisk(message: string): Risk {
   const n = normalizeText(message);
   return RISK_PATTERNS.find(([, re]) => re.test(n))?.[0] ?? "nenhum";
 }
 
-function cleanText(value: unknown, max: number): string {
+export function cleanText(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 

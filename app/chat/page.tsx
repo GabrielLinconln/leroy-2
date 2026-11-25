@@ -28,7 +28,7 @@ import {
   saveHandoffTicket,
   trackEvent,
 } from "@/lib/telemetry";
-import { ChatContext, ChatMessage, DynamicProjectList } from "@/lib/types";
+import { ChatContext, ChatMessage, DynamicProjectList, VisionAnalysisResult } from "@/lib/types";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -254,7 +254,9 @@ function ChatInner() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      const analysis = data.analysis;
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const analysis = data.analysis as VisionAnalysisResult;
+      const identified = analysis.confidence > 0;
 
       if (analysis.project) {
         saveDynamicProject(analysis.project);
@@ -263,7 +265,7 @@ function ChatInner() {
       trackEvent({
         type: "vision_scan",
         storeId: currentStore,
-        label: `Foto analisada: ${analysis.detectedItem} (${analysis.confidence}%)`,
+        label: `Foto analisada: ${analysis.detectedItem} (confiança ${confidenceLabel(analysis.confidence)})`,
         aisle: analysis.project?.items?.[0]?.aisle,
         painTopic: analysis.category,
       });
@@ -271,12 +273,14 @@ function ChatInner() {
       const aiMsg: ChatMessage = {
         id: `av-${Date.now()}`,
         role: "assistant",
-        text: `Peça identificada com **${analysis.confidence}% de precisão**.\n\n${analysis.diagnosis}`,
-        visionResult: analysis,
+        text: identified
+          ? `Identifiquei **${analysis.detectedItem}** (confiança ${confidenceLabel(analysis.confidence)}).\n\n${analysis.diagnosis}`
+          : analysis.diagnosis,
+        visionResult: identified ? analysis : undefined,
         actionProject: analysis.project,
-        suggestions: analysis.requiresSpecialist
-          ? ["Chamar vendedor especialista", "Resolver outro projeto"]
-          : ["Quero trocar a peça completa", "Chamar vendedor especialista"],
+        suggestions: analysis.requiresSpecialist || !identified
+          ? ["Chamar especialista"]
+          : [analysis.suggestedPrompt, "Chamar especialista"],
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -352,7 +356,7 @@ function ChatInner() {
                         Leitura Visual · {msg.visionResult.category}
                       </span>
                       <span className="rounded bg-signage px-2 py-0.5 font-mono text-[10px] font-bold text-leroy">
-                        {msg.visionResult.confidence}% PREC.
+                        CONFIANÇA {confidenceLabel(msg.visionResult.confidence).toUpperCase()}
                       </span>
                     </div>
                     <div className="mt-1.5 font-display text-[14px] font-bold text-signage">
@@ -577,4 +581,11 @@ function ChatInner() {
       />
     </div>
   );
+}
+
+// O modelo nao devolve probabilidade calibrada: mostrar faixa, nunca um percentual.
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 80) return "alta";
+  if (confidence >= 60) return "média";
+  return "baixa";
 }

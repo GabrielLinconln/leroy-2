@@ -22,20 +22,24 @@ export function VisionModal({
   const [caption, setCaption] = useState("");
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [uploadedName, setUploadedName] = useState<string>("");
+  const [fileError, setFileError] = useState("");
 
   if (!open) return null;
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    // Libera o input para que escolher o mesmo arquivo de novo dispare onChange.
+    e.target.value = "";
     if (!file) return;
     setUploadedName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setUploadedPreview(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setFileError("");
+    try {
+      setUploadedPreview(await resizeToJpeg(file));
+    } catch {
+      setUploadedPreview(null);
+      setUploadedName("");
+      setFileError("Não consegui abrir essa imagem. Tente uma foto JPG ou PNG.");
+    }
   }
 
   function submitUpload() {
@@ -126,6 +130,8 @@ export function VisionModal({
                   type="text"
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
+                  maxLength={200}
+                  aria-label="Legenda da foto (opcional)"
                   placeholder="Contexto opcional (ex: torneira do banheiro pingando)…"
                   className="h-10 w-full rounded-lg border border-rule-strong bg-white px-3 text-[13px] outline-none focus:border-signage"
                 />
@@ -147,6 +153,11 @@ export function VisionModal({
                   </button>
                 </div>
               </div>
+            )}
+            {fileError && (
+              <p role="alert" className="mt-2 text-[11.5px] font-semibold text-danger">
+                {fileError}
+              </p>
             )}
           </div>
 
@@ -201,4 +212,18 @@ export function VisionModal({
       </div>
     </div>
   );
+}
+
+const MAX_SIDE = 1024;
+
+// Foto de celular tem 3-8 MB; reduzida fica ~200 KB, sobe rapido no 4G e cabe no limite da API.
+async function resizeToJpeg(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.82);
 }

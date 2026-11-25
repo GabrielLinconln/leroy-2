@@ -3,7 +3,7 @@ import { GoogleGenAI, ThinkingLevel, type ContentListUnion } from "@google/genai
 export const CHAT_MODEL = "gemini-3.5-flash-lite";
 export const VISION_MODEL = "gemini-3.8-flash";
 
-const TIMEOUT_MS = 8000;
+const DEFAULT_TIMEOUT_MS = 8000;
 
 let client: GoogleGenAI | null = null;
 
@@ -20,6 +20,7 @@ export async function generateJson(params: {
   systemInstruction: string;
   contents: ContentListUnion;
   schema: object;
+  timeoutMs?: number;
 }): Promise<unknown> {
   client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -33,7 +34,7 @@ export async function generateJson(params: {
       temperature: 0.2,
       maxOutputTokens: 1024,
       thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      abortSignal: AbortSignal.timeout(params.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     },
   });
 
