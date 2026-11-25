@@ -170,10 +170,8 @@ function ChatInner() {
           label: `Lista gerada: ${reply.actionProject.title}`,
           aisle: firstAisle,
           painTopic: data.painTopic || reply.actionProject.sourceIntent,
-          durationSec: Math.max(
-            12,
-            Math.round((Date.now() - sessionStartRef.current) / 1000)
-          ),
+          durationSec: Math.round((Date.now() - sessionStartRef.current) / 1000),
+          engine: data.engine,
         });
       } else if (reply.handoffTicket) {
         saveHandoffTicket(reply.handoffTicket);
@@ -183,6 +181,7 @@ function ChatInner() {
           label: `Handoff ${reply.handoffTicket.id}: ${reply.handoffTicket.customerPain}`,
           aisle: reply.handoffTicket.aisle,
           painTopic: data.painTopic || reply.handoffTicket.category,
+          engine: data.engine,
         });
       } else {
         trackEvent({
@@ -190,6 +189,8 @@ function ChatInner() {
           storeId: currentStore,
           label: `Consulta: "${trimmed.slice(0, 60)}"`,
           painTopic: data.painTopic,
+          engine: data.engine,
+          unmet: data.unmet,
         });
       }
 

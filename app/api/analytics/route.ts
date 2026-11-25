@@ -1,39 +1,63 @@
 import { NextResponse } from "next/server";
-import { computeAnalyticsSummary, SEED_EVENTS, SEED_TICKETS } from "@/lib/telemetry";
-import { AnalyticsEvent } from "@/lib/types";
+import { cleanText } from "@/lib/copilotLlm";
+import { isRateLimited } from "@/lib/rateLimit";
+import { listEvents, saveEvent, storageMode } from "@/lib/serverStore";
+import { DEFAULT_STORE_ID, STORES } from "@/lib/stores";
+import { ANALYTICS_EVENT_TYPES, AnalyticsEvent } from "@/lib/types";
 
-// Coletor em memória no servidor (complementado por persistência local no cliente)
-let serverEvents: AnalyticsEvent[] = [...SEED_EVENTS];
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const summary = computeAnalyticsSummary(serverEvents, SEED_TICKETS);
-  return NextResponse.json({
-    count: serverEvents.length,
-    summary,
-    events: serverEvents.slice(0, 60),
-  });
+  const { rows, demo } = await listEvents();
+  return NextResponse.json({ events: rows, demo, storage: storageMode });
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = (await req.json()) as AnalyticsEvent;
-    if (!body?.type || !body?.label) {
-      return NextResponse.json({ error: "Evento inválido" }, { status: 400 });
-    }
-    const event: AnalyticsEvent = {
-      id: body.id || `ev-${Date.now().toString(36)}`,
-      type: body.type,
-      storeId: body.storeId || "es-vitoria",
-      timestamp: body.timestamp || Date.now(),
-      label: body.label,
-      aisle: body.aisle,
-      painTopic: body.painTopic,
-      productName: body.productName,
-      durationSec: body.durationSec,
-    };
-    serverEvents = [event, ...serverEvents.filter((e) => e.id !== event.id)].slice(0, 200);
-    return NextResponse.json({ ok: true, event }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+  if (isRateLimited(req, "eventos", 120)) {
+    return NextResponse.json({ error: "Muitos eventos" }, { status: 429 });
   }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Evento inválido" }, { status: 400 });
+  }
+
+  const type = ANALYTICS_EVENT_TYPES.find((t) => t === body.type);
+  const label = cleanText(body.label, 160);
+  if (!type || !label) {
+    return NextResponse.json({ error: "Evento inválido" }, { status: 400 });
+  }
+
+  const storeId = STORES.find((s) => s.id === body.storeId)?.id ?? DEFAULT_STORE_ID;
+  const optional = (value: unknown, max: number) => cleanText(value, max) || undefined;
+  const duration = typeof body.durationSec === "number" && body.durationSec >= 0 && body.durationSec < 36_000;
+
+  const event: AnalyticsEvent = {
+    id: optional(body.id, 40) ?? `ev-${crypto.randomUUID()}`,
+    type,
+    storeId,
+    // Relogio do servidor: o do aparelho pode estar errado.
+    timestamp: Date.now(),
+    label,
+    aisle: optional(body.aisle, 8),
+    painTopic: optional(body.painTopic, 60),
+    productName: optional(body.productName, 120),
+    durationSec: duration ? Math.round(body.durationSec as number) : undefined,
+    sessionId: optional(body.sessionId, 40),
+    engine: optional(body.engine, 40),
+    unmet: optional(body.unmet, 80),
+  };
+
+  try {
+    await saveEvent(event);
+  } catch (err) {
+    console.warn("[analytics] falha ao gravar:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Falha ao gravar" }, { status: 503 });
+  }
+  return NextResponse.json({ ok: true }, { status: 201 });
 }

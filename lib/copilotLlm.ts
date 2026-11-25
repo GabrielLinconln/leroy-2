@@ -32,6 +32,7 @@ export type LlmDecision = {
   productIds: string[];
   department?: Department;
   painTopic?: string;
+  unmetNeed?: string;
 };
 
 export const DECISION_SCHEMA = {
@@ -56,6 +57,7 @@ export const DECISION_SCHEMA = {
     productIds: { type: "array", items: { type: "string", enum: PRODUCT_IDS }, maxItems: 6 },
     department: { type: "string", enum: DEPARTMENTS },
     painTopic: { type: "string", description: "Tema da dor em até 4 palavras, para o painel da loja." },
+    unmetNeed: { type: "string", description: "Só se o cliente pediu algo que não existe no CATÁLOGO: o item, em até 4 palavras." },
   },
   required: ["reply", "action", "risk", "suggestions", "productIds"],
 } as const;
@@ -148,6 +150,7 @@ export function parseDecision(raw: unknown): LlmDecision | null {
     productIds,
     department: DEPARTMENTS.find((d) => d === r.department),
     painTopic: cleanText(r.painTopic, 40) || undefined,
+    unmetNeed: cleanText(r.unmetNeed, 80) || undefined,
   };
 }
 
@@ -215,6 +218,7 @@ export function buildReply(
   if (!project) {
     return {
       painTopic: painTopic ?? (decision.action === "out_of_scope" ? "Fora do escopo" : undefined),
+      unmet: decision.unmetNeed,
       response: { text: decision.reply + safety, suggestions },
       newContext,
     };

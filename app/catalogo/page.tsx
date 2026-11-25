@@ -105,6 +105,7 @@ function CatalogoInner() {
       label: `Busca semântica: "${q}" → ${top?.product.name ?? "catálogo"}`,
       aisle: top?.product.aisle,
       painTopic: top?.product.category || "Busca Semântica",
+      unmet: top ? undefined : q.slice(0, 80),
     });
   }
 

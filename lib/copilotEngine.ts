@@ -130,6 +130,8 @@ export type CopilotReplyPayload = {
   response: Omit<ChatMessage, "id" | "role" | "timestamp">;
   newContext: ChatContext;
   painTopic?: string;
+  /** Pedido que o catalogo nao atendeu, para o painel da loja. */
+  unmet?: string;
 };
 
 /**
@@ -693,6 +695,7 @@ export function processCopilotMessage(
 
   return {
     painTopic: "Dúvida geral",
+    unmet: input.slice(0, 80),
     response: {
       text: "Ainda não encontrei um projeto exato para essa frase. Pode me contar **o que aconteceu ou o que você quer instalar/reformar** — ou enviar uma **foto** pelo botão da câmera?",
       suggestions: [

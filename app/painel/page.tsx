@@ -104,15 +104,34 @@ export default function PainelPage() {
   const [tickets, setTickets] = useState<HandoffTicket[]>([]);
   const [companionQuery, setCompanionQuery] = useState("chuveiro 220v wago");
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [demo, setDemo] = useState(false);
+  const [storage, setStorage] = useState<string | null>(null);
 
-  const reload = () => {
-    setEvents(getStoredEvents());
-    setTickets(getStoredTickets());
+  // Fonte e o servidor (todos os aparelhos da loja); offline, o que este aparelho registrou.
+  const reload = async () => {
+    try {
+      const [evRes, tkRes] = await Promise.all([fetch("/api/analytics"), fetch("/api/handoff")]);
+      if (!evRes.ok || !tkRes.ok) throw new Error(`HTTP ${evRes.status}/${tkRes.status}`);
+      const ev = await evRes.json();
+      const tk = await tkRes.json();
+      setEvents(ev.events);
+      setDemo(ev.demo);
+      setStorage(ev.storage);
+      // Chamado de exemplo nao existe no servidor: manter o status mudado aqui.
+      setTickets((prev) => (tk.demo && prev.length > 0 ? prev : tk.tickets));
+    } catch {
+      setEvents(getStoredEvents());
+      setTickets(getStoredTickets());
+      setStorage(null);
+    }
   };
 
   useEffect(() => {
     setStoreId(getSelectedStoreId());
     reload();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) reload();
+    }, 5000);
 
     const onStore = (e: Event) => {
       const next = (e as CustomEvent<string>).detail;
@@ -121,6 +140,7 @@ export default function PainelPage() {
     window.addEventListener("lm:store-changed", onStore);
     window.addEventListener("lm:telemetry-updated", reload);
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener("lm:store-changed", onStore);
       window.removeEventListener("lm:telemetry-updated", reload);
     };
@@ -143,8 +163,8 @@ export default function PainelPage() {
   const openTicketsCount = tickets.filter((t) => t.status !== "resolvido").length;
 
   function changeTicketStatus(ticketId: string, status: HandoffTicketStatus) {
-    const updated = updateHandoffTicketStatus(ticketId, status);
-    setTickets(updated);
+    updateHandoffTicketStatus(ticketId, status);
+    setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status } : t)));
     fetch("/api/handoff", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -228,16 +248,23 @@ export default function PainelPage() {
       </section>
 
       <main className="container-wide flex-1 space-y-6 py-6">
+        {demo && (
+          <p role="status" className="rounded-lg border border-amberwarn bg-amberwarn-soft px-3.5 py-2.5 text-[12.5px] text-signage">
+            <strong>Dados de exemplo.</strong> Ainda não há eventos reais nesta instalação; os números abaixo
+            são trocados pelos reais assim que o primeiro cliente usar o app.
+          </p>
+        )}
+
         {/* 4 KPIs principais (espaçados e legíveis) */}
         <section className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
           <KpiCard
-            label="Jornadas hoje"
+            label="Jornadas"
             value={String(summary.totalJourneys)}
             sub={`${summary.liveEventsCount} eventos registrados`}
           />
           <KpiCard
             label="Autoatendimento"
-            value={`${summary.autonomyRate}%`}
+            value={summary.autonomyRate === null ? "—" : `${summary.autonomyRate}%`}
             sub="Resolvidos sem fila"
             accent
           />
@@ -492,6 +519,9 @@ export default function PainelPage() {
                 </div>
 
                 <ul className="mt-4 divide-y divide-rule">
+                  {summary.outOfStockAlerts.length === 0 && (
+                    <li className="py-3 text-[13px] text-signage-muted">Nenhuma ruptura registrada.</li>
+                  )}
                   {summary.outOfStockAlerts.map((al) => (
                     <li
                       key={al.productName}
@@ -542,6 +572,22 @@ export default function PainelPage() {
                     );
                   })}
                 </div>
+
+                <h3 className="mt-6 font-display text-[15px] font-bold text-signage">
+                  Demanda não atendida
+                </h3>
+                <p className="text-[12px] text-signage-muted">O que clientes pediram e o catálogo não tinha.</p>
+                <ul className="mt-2 divide-y divide-rule">
+                  {summary.topUnmet.length === 0 && (
+                    <li className="py-2.5 text-[13px] text-signage-muted">Nada registrado ainda.</li>
+                  )}
+                  {summary.topUnmet.map((u) => (
+                    <li key={u.need} className="flex items-center justify-between gap-2 py-2.5 text-[13px]">
+                      <span className="min-w-0 break-words font-medium text-signage">{u.need}</span>
+                      <span className="flex-shrink-0 font-mono text-[12px] font-bold text-signage-muted">{u.count}×</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               <div className="panel flex flex-col justify-between p-5 lg:col-span-5">
@@ -562,11 +608,23 @@ export default function PainelPage() {
                   <MetricRow
                     icon={<ChartIcon size={15} className="text-leroy-dark" />}
                     label="Tempo médio de diagnóstico"
-                    value={`${summary.avgDiagnosisSec}s`}
+                    value={summary.avgDiagnosisSec === null ? "—" : `${summary.avgDiagnosisSec}s`}
+                  />
+                  <MetricRow
+                    icon={<ShieldCheckIcon size={15} className="text-leroy-dark" />}
+                    label="Respostas pela IA (resto: motor local)"
+                    value={
+                      summary.aiReplies.total === 0
+                        ? "—"
+                        : `${Math.round(((summary.aiReplies.total - summary.aiReplies.local) / summary.aiReplies.total) * 100)}%`
+                    }
                   />
                 </div>
                 <div className="mt-4 rounded-lg bg-floor px-3 py-2 font-mono text-[11px] text-signage-muted">
-                  Endpoint ativo: <strong className="text-signage">/api/analytics</strong>
+                  Dados em:{" "}
+                  <strong className="text-signage">
+                    {storage === "postgres" ? "Postgres (Neon)" : storage === "memoria" ? "memória do servidor" : "este aparelho (offline)"}
+                  </strong>
                 </div>
               </div>
             </div>

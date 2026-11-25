@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { INITIAL_CONTEXT, processCopilotMessage } from "@/lib/copilotEngine";
+import { INITIAL_CONTEXT, processCopilotMessage, type CopilotReplyPayload } from "@/lib/copilotEngine";
 import { processWithLlm, type ChatTurn } from "@/lib/copilotLlm";
 import { CHAT_MODEL, isLlmEnabled } from "@/lib/llm";
 import { isRateLimited } from "@/lib/rateLimit";
+import { saveTicket } from "@/lib/serverStore";
 import { DEFAULT_STORE_ID } from "@/lib/stores";
 import { ChatContext } from "@/lib/types";
 
@@ -55,26 +56,34 @@ export async function POST(req: Request) {
     baseCtx.storeId = body.storeId;
   }
 
+  let result: CopilotReplyPayload | null = null;
+  let engine = "local";
   if (isLlmEnabled()) {
     try {
-      const result = await processWithLlm(message, sanitizeTurns(body.history), baseCtx);
-      return NextResponse.json({
-        response: result.response,
-        context: result.newContext,
-        painTopic: result.painTopic,
-        engine: CHAT_MODEL,
-      });
+      result = await processWithLlm(message, sanitizeTurns(body.history), baseCtx);
+      engine = CHAT_MODEL;
     } catch (err) {
       // Sem conteudo do cliente no log: so o motivo da falha.
       console.warn("[chat] fallback para motor local:", err instanceof Error ? err.message : err);
     }
   }
+  result ??= processCopilotMessage(message, baseCtx);
 
-  const result = processCopilotMessage(message, baseCtx);
+  // O chamado nasce aqui, no servidor: o painel da loja le daqui, nao do aparelho do cliente.
+  const ticket = result.response.handoffTicket;
+  if (ticket) {
+    try {
+      await saveTicket(ticket);
+    } catch (err) {
+      console.warn("[chat] falha ao gravar chamado:", err instanceof Error ? err.message : err);
+    }
+  }
+
   return NextResponse.json({
     response: result.response,
     context: result.newContext,
     painTopic: result.painTopic,
-    engine: "local",
+    unmet: result.unmet,
+    engine,
   });
 }
