@@ -41,7 +41,6 @@ export const CATALOG: Product[] = [
     laymanTerms: ["miolo torneira uma alavanca", "torneira quente e fria pingando", "monocomando vazando"],
     tags: ["hidraulica", "monocomando", "cartucho", "ceramico", "torneira", "reparo", "pingando", "blukit"],
     stockByStore: { "es-vitoria": 14, "sp-tiete": 0, "rj-barra": 9 },
-    substituteId: "hid-reparo-univ",
   },
   {
     id: "hid-veda-rosca",
@@ -476,7 +475,6 @@ export const CATALOG: Product[] = [
     laymanTerms: ["parede oca", "parede de gesso", "pendurar coisa no drywall", "standers"],
     tags: ["bucha", "drywall", "gesso", "parede oca", "parafuso", "fixacao", "prateleira", "standers"],
     stockByStore: { "es-vitoria": 44, "sp-tiete": 40, "rj-barra": 29 },
-    substituteId: "fix-bucha-s8",
   },
   {
     id: "fix-mao-francesa",
@@ -711,7 +709,6 @@ export const CATALOG: Product[] = [
     laymanTerms: ["parede molhada", "bolha na tinta", "infiltracao", "mofo voltando", "umidade rodape"],
     tags: ["impermeabilizante", "umidade", "infiltracao", "mofo", "bolha", "banheiro", "parede", "axton"],
     stockByStore: { "es-vitoria": 15, "sp-tiete": 13, "rj-barra": 0 },
-    substituteId: "tin-fundo-prep",
   },
 
   // ================= LIMPEZA & PROTEÇÃO (Corredor C21) =================

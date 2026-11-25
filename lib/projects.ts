@@ -9,6 +9,18 @@ type ItemSpec = {
   reason?: string;
 };
 
+const liters = (unit: string) => {
+  const match = /(\d+(?:,\d+)?)\s*L\b/.exec(unit);
+  return match ? parseFloat(match[1].replace(",", ".")) : null;
+};
+
+/** Mantem o volume ao trocar de embalagem (1 lata 18 L -> 5 galoes 3,6 L). */
+export function equivalentQuantity(quantity: number, fromUnit: string, toUnit: string): number {
+  const from = liters(fromUnit);
+  const to = liters(toUnit);
+  return from && to ? Math.ceil((quantity * from) / to - 1e-9) : quantity;
+}
+
 export function materializeProjectItems(
   specs: ItemSpec[],
   storeId: string
@@ -259,6 +271,31 @@ const TUTORIALS: Record<string, TutorialStep[]> = {
   ],
 };
 
+const CAN_LITERS: Record<string, number> = {
+  "tin-acrilica-18l-azul": 18,
+  "tin-acrilica-36l-azul": 3.6,
+  "tin-acrilica-18l-branco": 18,
+  "tin-acrilica-36l-branco": 3.6,
+};
+
+/** Combinacao mais barata de latas que cobre os litros. ids: lata grande primeiro. */
+function cheapestCans(liters: number, ids: string[]): Array<{ productId: string; quantity: number }> {
+  const [big, small = big] = ids;
+  const price = (id: string) => getProductById(id)?.price ?? Infinity;
+  let best = { cost: Infinity, nBig: 0, nSmall: 0 };
+  for (let nBig = 0; nBig <= Math.ceil(liters / CAN_LITERS[big]); nBig++) {
+    const rest = liters - nBig * CAN_LITERS[big];
+    const nSmall = rest > 0 ? Math.ceil(rest / CAN_LITERS[small] - 1e-9) : 0;
+    const cost = nBig * price(big) + nSmall * price(small);
+    if (cost < best.cost) best = { cost, nBig, nSmall };
+  }
+  if (big === small) return [{ productId: big, quantity: best.nBig + best.nSmall }];
+  return [
+    { productId: big, quantity: best.nBig },
+    { productId: small, quantity: best.nSmall },
+  ].filter((can) => can.quantity > 0);
+}
+
 export function buildPaintingProject(params: {
   storeId: string;
   widthM: number;
@@ -274,28 +311,20 @@ export function buildPaintingProject(params: {
   const ceilingArea = includeCeiling ? Math.round(widthM * lengthM) : 0;
   const totalArea = wallArea + ceilingArea;
   // Rendimento prático médio: ~9,5 m² por litro por demão → 2 demãos
-  const litersNeeded = Math.ceil((totalArea * 2) / 9.5);
-
-  const useLargeCan = litersNeeded > 9;
-  const paintProductId =
-    color === "azul"
-      ? useLargeCan
-        ? "tin-acrilica-18l-azul"
-        : "tin-acrilica-36l-azul"
-      : finish === "acetinado" || useLargeCan
-      ? "tin-acrilica-18l-branco"
-      : "tin-acrilica-36l-branco";
-
-  const paintQty = useLargeCan
-    ? Math.max(1, Math.ceil(litersNeeded / 18))
-    : Math.max(1, Math.ceil(litersNeeded / 3.6));
+  const toLiters = (area: number) => Math.ceil((area * 2) / 9.5);
+  const litersNeeded = toLiters(totalArea);
+  // Azul so existe fosco no catalogo; branco fosco so em 3,6 L e acetinado so em 18 L.
+  const effectiveFinish = color === "azul" ? "fosco" : finish;
+  const wallCans = color === "azul" ? ["tin-acrilica-18l-azul", "tin-acrilica-36l-azul"] : [`tin-acrilica-${finish === "acetinado" ? "18l" : "36l"}-branco`];
+  // Teto em cor diferente: parede e teto calculados separados para nao somar a area duas vezes.
+  const separateCeiling = includeCeiling && color !== "branco";
+  const wallLiters = separateCeiling ? toLiters(wallArea) : litersNeeded;
 
   const specs: ItemSpec[] = [
-    {
-      productId: paintProductId,
-      quantity: paintQty,
-      reason: `Calculado para ${totalArea}m² em 2 demãos (~${litersNeeded}L necessários)`,
-    },
+    ...cheapestCans(wallLiters, wallCans).map((can) => ({
+      ...can,
+      reason: `Calculado para ${separateCeiling ? wallArea : totalArea}m² em 2 demãos (~${wallLiters}L necessários)`,
+    })),
     { productId: "tin-rolo-bandeja", quantity: 1, reason: "Aplicação uniforme sem respingos" },
     { productId: "tin-trincha", quantity: 1, reason: "Recortes em cantos e rodapés" },
     { productId: "tin-fita-crepe", quantity: 1, reason: "Proteção de batentes e rodapés" },
@@ -309,16 +338,15 @@ export function buildPaintingProject(params: {
     },
   ];
 
-  if (includeCeiling && color !== "branco") {
-    specs.splice(1, 0, {
-      productId: "tin-acrilica-36l-branco",
-      quantity: Math.max(1, Math.ceil((ceilingArea * 2) / 28)),
+  if (separateCeiling) {
+    specs.splice(1, 0, ...cheapestCans(toLiters(ceilingArea), ["tin-acrilica-36l-branco"]).map((can) => ({
+      ...can,
       reason: `Tinta branca dedicada para o teto (${ceilingArea}m²)`,
-    });
+    })));
   }
 
   const colorLabel = color === "azul" ? "azul sereno" : "branco neve";
-  const finishLabel = finish === "acetinado" ? "acetinado" : "fosco";
+  const finishLabel = effectiveFinish;
   const id = `pintura-${widthM}x${lengthM}-${color}-${includeCeiling ? "teto" : "parede"}`.replace(
     /\./g,
     "_"

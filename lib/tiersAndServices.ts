@@ -292,6 +292,7 @@ const INSTALL_SERVICES: Record<string, InstallServiceOption> = {
   },
 };
 
-export function getInstallServiceForIntent(intent: string): InstallServiceOption {
-  return INSTALL_SERVICES[intent] ?? INSTALL_SERVICES.torneira;
+// Sem servico correspondente nao oferece nada: antes caia em "instalacao de torneira" para qualquer lista.
+export function getInstallServiceForIntent(intent: string): InstallServiceOption | undefined {
+  return INSTALL_SERVICES[intent];
 }

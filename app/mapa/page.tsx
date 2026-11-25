@@ -37,7 +37,7 @@ export default function MapaPage() {
 
 function MapaInner() {
   const params = useSearchParams();
-  const projectId = params.get("id") ?? "reparo-torneira";
+  const projectId = params.get("id") ?? "";
 
   const [storeId, setStoreId] = useState("es-vitoria");
   const [project, setProject] = useState<DynamicProjectList | null>(null);
@@ -47,16 +47,14 @@ function MapaInner() {
   const [completed, setCompleted] = useState(false);
   const [navStartTs, setNavStartTs] = useState<number>(0);
   const [eslItem, setEslItem] = useState<ProjectItem | null>(null);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     const currentStore = getSelectedStoreId();
     setStoreId(currentStore);
 
-    const stored = getDynamicProject(projectId);
-    const loaded =
-      stored ??
-      getPresetProject(projectId, currentStore) ??
-      getPresetProject("reparo-torneira", currentStore)!;
+    const loaded = getDynamicProject(projectId) ?? getPresetProject(projectId, currentStore);
+    setMissing(!loaded);
     setProject(loaded);
 
     const onStore = (e: Event) => {
@@ -142,9 +140,17 @@ function MapaInner() {
     return (
       <div className="flex min-h-screen flex-col bg-floor">
         <StoreBar />
-        <div className="flex flex-1 items-center justify-center font-mono text-[13px] text-signage-muted">
-          Calculando rota ortogonal…
-        </div>
+        {missing ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-[14px] font-semibold text-signage">Não encontrei essa lista neste aparelho.</p>
+            <p className="text-[12.5px] text-signage-muted">Ela pode ter sido criada em outro celular. Descreva o projeto de novo que o Copiloto monta em segundos.</p>
+            <Link href="/chat" className="btn-accent">Abrir o Copiloto</Link>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center font-mono text-[13px] text-signage-muted">
+            Calculando rota…
+          </div>
+        )}
       </div>
     );
   }

@@ -64,7 +64,7 @@ export default function ChatPage() {
 
 function ChatSkeleton() {
   return (
-    <div className="flex h-screen flex-col bg-floor">
+    <div className="flex h-dvh flex-col bg-floor">
       <StoreBar />
       <div className="flex flex-1 items-center justify-center">
         <TypingDots />
@@ -307,7 +307,7 @@ function ChatInner() {
   const activeStore = getStoreById(storeId);
 
   return (
-    <div className="flex h-screen flex-col bg-floor">
+    <div className="flex h-dvh flex-col bg-floor">
       <StoreBar />
 
       {/* Sub-barra técnica de sessão em loja */}

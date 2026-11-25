@@ -1,3 +1,4 @@
+import { getProductById } from "./catalog";
 import {
   CompatibilityAlert,
   CompatibilityAudit,
@@ -230,7 +231,15 @@ export function auditProjectCompatibility(
   return {
     score,
     statusLabel,
-    alerts,
+    alerts: alerts.map(withCatalogPrice),
     passedChecks,
   };
+}
+
+// Preco e corredor no rotulo vem do catalogo: escritos a mao ficavam desatualizados.
+function withCatalogPrice(alert: CompatibilityAlert): CompatibilityAlert {
+  const product = getProductById(alert.replacementProductId ?? alert.targetProductId ?? "");
+  if (!product || !alert.fixLabel) return alert;
+  const price = product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return { ...alert, fixLabel: alert.fixLabel.replace(/\(R\$[^)]*\)/, `(${price} · ${product.corridorCode})`) };
 }

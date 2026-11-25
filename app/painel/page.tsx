@@ -159,7 +159,8 @@ export default function PainelPage() {
     a.href = url;
     a.download = fileName;
     a.click();
-    URL.revokeObjectURL(url);
+    // Revogar no mesmo tick cancela o download no Safari e no Firefox.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function exportJson() {
@@ -655,7 +656,7 @@ function TabButton({
       <span>{label}</span>
       {badge && (
         <span
-          className={`rounded-full px-1.5 py-0.2 font-mono text-[10.5px] font-bold ${
+          className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] font-bold ${
             active
               ? "bg-leroy text-signage"
               : "bg-floor text-signage-muted"
