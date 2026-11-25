@@ -4,6 +4,7 @@ import { Product } from "@/lib/types";
 import { ProductCardMedia } from "./ProductThumb";
 import { MicroBarcode } from "./EslShelfModal";
 import { CheckIcon, CloseIcon, MapPinIcon, PlusIcon, RadioIcon } from "./Icons";
+import { useDialog } from "./useDialog";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -30,6 +31,7 @@ export function ProductDetailModal({
   onToggleSelect: (product: Product) => void;
   onOpenEsl: (product: Product, stockQty: number) => void;
 }) {
+  const dialogRef = useDialog<HTMLDivElement>(!!product, onClose);
   if (!product) return null;
 
   const inStock = stockQty > 0;
@@ -40,7 +42,10 @@ export function ProductDetailModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-[520px] animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-2xl"
+        ref={dialogRef}
+        role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label={product.name}
+        className="max-h-[92vh] w-full max-w-[520px] focus:outline-none animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Foto full-bleed 16:10 para caber integralmente em telas 1280x800 sem rolagem */}
@@ -150,7 +155,7 @@ export function ProductDetailModal({
                 className="btn-secondary flex-1 !py-2.5"
               >
                 <RadioIcon size={15} className="text-leroy-dark" />
-                Piscar etiqueta ESL
+                Acender etiqueta na prateleira
               </button>
             )}
 

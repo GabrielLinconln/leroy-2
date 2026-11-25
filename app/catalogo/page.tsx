@@ -152,9 +152,9 @@ function CatalogoInner() {
       tutorial: [
         {
           step: 1,
-          title: "Localize cada item pela etiqueta ESL piscante",
+          title: "Ache cada item pela etiqueta que acende",
           detail:
-            "No corredor indicado, toque em 'Piscar ESL' para acender o LED verde na prateleira exata.",
+            "No corredor indicado, toque em 'Localizar' para acender o LED verde na prateleira exata.",
           durationMin: 4,
         },
         {

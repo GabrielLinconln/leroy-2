@@ -7,6 +7,7 @@ import { buildEslPlanogram } from "@/lib/eslPlanogram";
 import { trackEvent } from "@/lib/telemetry";
 import { ProjectItem } from "@/lib/types";
 import { corridorOf } from "@/lib/storeMap";
+import { useDialog } from "./useDialog";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -155,6 +156,7 @@ export function EslShelfModal({
   onClose: () => void;
 }) {
   const [countdown, setCountdown] = useState(45);
+  const dialogRef = useDialog<HTMLDivElement>(!!item, onClose);
 
   const planogram = useMemo(() => {
     if (!item) return null;
@@ -193,7 +195,10 @@ export function EslShelfModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-[660px] animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-xl"
+        ref={dialogRef}
+        role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label="Localizar o produto na prateleira"
+        className="max-h-[92vh] w-full max-w-[660px] focus:outline-none animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between bg-signage px-5 py-3 text-white">

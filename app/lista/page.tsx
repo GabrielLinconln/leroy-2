@@ -585,11 +585,11 @@ function ListaInner() {
                               <button
                                 type="button"
                                 onClick={() => setEslItem(item)}
-                                title="Piscar etiqueta ESL na prateleira"
+                                title="Acender a etiqueta do produto na prateleira"
                                 className="inline-flex h-7 items-center gap-1 rounded-md border border-leroy/60 bg-leroy-soft px-2 font-mono text-[10.5px] font-bold text-leroy-deep transition hover:bg-leroy hover:text-signage"
                               >
                                 <RadioIcon size={11} />
-                                ESL
+                                Localizar
                               </button>
                             )}
 

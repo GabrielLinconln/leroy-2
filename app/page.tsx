@@ -306,7 +306,7 @@ export default function StoreModeHomePage() {
             </div>
             <div className="min-w-0">
               <div className="font-display text-[14.5px] font-bold text-signage group-hover:text-leroy-deep">
-                Planta 2D & Etiquetas ESL
+                Mapa da loja e etiqueta que acende
               </div>
               <div className="text-[12px] text-signage-muted">
                 Mapa de corredores de {activeStore.shortName}
@@ -344,7 +344,7 @@ export default function StoreModeHomePage() {
                   Console do Vendedor
                 </div>
                 <div className="text-[12px] text-white/65">
-                  Handoff, mapa de calor e dados
+                  Chamados, mapa de calor e dados
                 </div>
               </div>
             </div>

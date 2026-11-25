@@ -235,7 +235,7 @@ function ChatInner() {
       role: "user",
       text:
         selection.kind === "sample"
-          ? `Scanner visual enviado: ${selection.label}`
+          ? `Foto enviada: ${selection.label}`
           : selection.caption
           ? `Foto enviada (${selection.fileName}): ${selection.caption}`
           : `Foto enviada para diagnóstico (${selection.fileName})`,
@@ -445,7 +445,7 @@ function ChatInner() {
                           className="btn-accent !px-3 !py-2.5 !text-[12.5px]"
                         >
                           <MapIcon size={13} />
-                          Rota & ESL
+                          Rota na loja
                         </button>
                       </div>
                     </div>
@@ -552,7 +552,7 @@ function ChatInner() {
             <button
               type="button"
               aria-label="Identificar peça por foto"
-              title="Scanner Visual (Câmera / Fotos)"
+              title="Enviar foto da peça"
               onClick={() => setVisionOpen(true)}
               className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-rule-strong bg-white text-signage transition hover:border-leroy hover:bg-leroy-soft hover:text-leroy-deep"
             >

@@ -103,7 +103,7 @@ export function buildProductListProject(
     id: `custom-${crypto.randomUUID().slice(0, 8)}`,
     title: `Seleção para "${query.slice(0, 36)}${query.length > 36 ? "…" : ""}"`,
     subtitle: `${items.length} produtos encontrados no catálogo da loja`,
-    description: `Traduzi sua busca em linguagem natural para os itens técnicos correspondentes no catálogo da loja, já com corredor, prateleira e estoque ao vivo.`,
+    description: `Itens do catálogo que combinam com o que você descreveu, com corredor, prateleira e estoque da loja.`,
     storeId,
     difficulty: "Fácil",
     estimatedInstallMin: 20,
@@ -687,7 +687,7 @@ export function processCopilotMessage(
       input,
       matches.map((m) => ({
         productId: m.product.id,
-        reason: `Correspondência semântica ${m.score}% (${m.matchedTerms.slice(0, 2).join(", ")})`,
+        reason: `Combina com: ${m.matchedTerms.slice(0, 2).join(", ")}`,
       })),
       "busca-semantica"
     );

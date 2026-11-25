@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { CameraIcon, CloseIcon, SparkleIcon, UploadIcon } from "./Icons";
 import { VISION_SAMPLES } from "@/lib/visionEngine";
 import { VisionSampleId } from "@/lib/types";
+import { useDialog } from "./useDialog";
 
 export type VisionSelection =
   | { kind: "sample"; sampleId: VisionSampleId; label: string; preview: string }
@@ -23,6 +24,7 @@ export function VisionModal({
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [uploadedName, setUploadedName] = useState<string>("");
   const [fileError, setFileError] = useState("");
+  const dialogRef = useDialog<HTMLDivElement>(open, onClose);
 
   if (!open) return null;
 
@@ -62,14 +64,17 @@ export function VisionModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-[490px] animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-xl"
+        ref={dialogRef}
+        role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label="Enviar foto da peça"
+        className="max-h-[90vh] w-full max-w-[490px] focus:outline-none animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between bg-signage px-5 py-3.5 text-white">
           <div className="flex items-center gap-2">
             <CameraIcon size={15} className="text-leroy" />
             <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em]">
-              Scanner Visual de Peças & Etiquetas
+              Foto da peça ou da etiqueta
             </span>
           </div>
           <button

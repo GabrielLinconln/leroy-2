@@ -171,7 +171,7 @@ function MapaInner() {
         <div className="container-wide flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
             <div className="flex items-center gap-2 font-mono text-[10.5px] font-bold uppercase tracking-wider text-leroy-deep">
-              <span>NAVEGAÇÃO + ESL PICK-TO-LIGHT</span>
+              <span>ROTA NA LOJA + ETIQUETA QUE ACENDE</span>
               <span>·</span>
               <span>{activeStore.shortName}</span>
             </div>
@@ -241,7 +241,7 @@ function MapaInner() {
                           Itens nesta gôndola · Último Metro
                         </span>
                         <span className="font-mono text-[10px] font-bold text-leroy-deep">
-                          TOQUE EM PISCAR ESL
+                          TOQUE EM LOCALIZAR
                         </span>
                       </div>
 
@@ -467,11 +467,11 @@ function MapaInner() {
                                   <button
                                     type="button"
                                     onClick={() => setEslItem(it)}
-                                    title="Piscar etiqueta ESL na prateleira"
+                                    title="Acender a etiqueta do produto na prateleira"
                                     className="inline-flex flex-shrink-0 items-center gap-1 rounded bg-leroy-soft px-2 py-1 font-mono text-[10px] font-bold text-leroy-deep hover:bg-leroy hover:text-signage"
                                   >
                                     <RadioIcon size={11} />
-                                    ESL
+                                    Localizar
                                   </button>
                                 </div>
                               ))}
