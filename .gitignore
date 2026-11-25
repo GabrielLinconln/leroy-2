@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.env*.local
+.DS_Store
+*.log
+.vercel
+tsconfig.tsbuildinfo
+scripts/__pycache__
+scripts/collected_images
+scripts/collected_catalog.json
+scripts/collected_catalog_export.ts
+
