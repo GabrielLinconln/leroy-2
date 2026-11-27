@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { StoreBar } from "@/components/StoreBar";
@@ -21,10 +21,11 @@ import {
   ShieldCheckIcon,
   WrenchIcon,
 } from "@/components/Icons";
-import { getProductById, getStockForStore } from "@/lib/catalog";
+import { getProductById } from "@/lib/catalog";
 import { auditProjectCompatibility } from "@/lib/compatibilityEngine";
-import { getPresetProject, materializeProjectItems } from "@/lib/projects";
+import { equivalentQuantity, getPresetProject, materializeProjectItems } from "@/lib/projects";
 import { getStoreById } from "@/lib/stores";
+import { corridorOf, optimizeAisleOrder } from "@/lib/storeMap";
 import {
   getDynamicProject,
   getSelectedStoreId,
@@ -50,29 +51,15 @@ function formatBRL(value: number) {
   });
 }
 
+// Rematerializa pelo catalogo: preco, corredor e substituto sempre da loja atual.
 function syncItemsWithStore(items: ProjectItem[], storeId: string): ProjectItem[] {
-  return items.map((item) => {
-    const prod = getProductById(item.productId);
-    if (!prod) return item;
-    const stockQty = getStockForStore(prod, storeId);
-    const sub = prod.substituteId ? getProductById(prod.substituteId) : undefined;
-    const subStock = sub ? getStockForStore(sub, storeId) : 0;
-    return {
-      ...item,
-      brand: prod.brand,
-      leroyExclusive: prod.leroyExclusive,
-      imageUrl: prod.imageUrl,
-      corridorCode: prod.corridorCode,
-      stockQty,
-      inStock: stockQty > 0,
-      substituteId: sub && subStock > 0 ? sub.id : undefined,
-      substituteName: sub && subStock > 0 ? sub.name : undefined,
-      substitutePrice: sub && subStock > 0 ? sub.price : undefined,
-      substituteAisle: sub && subStock > 0 ? sub.aisle : undefined,
-      substituteShelf: sub && subStock > 0 ? sub.shelfLocation : undefined,
-      substituteStockQty: sub && subStock > 0 ? subStock : undefined,
-    };
-  });
+  return items.map(
+    (item) =>
+      materializeProjectItems(
+        [{ productId: item.productId, quantity: item.quantity, optional: item.optional, reason: item.reason }],
+        storeId
+      )[0] ?? item
+  );
 }
 
 export default function ListaPage() {
@@ -85,7 +72,7 @@ export default function ListaPage() {
 
 function ListaInner() {
   const params = useSearchParams();
-  const projectId = params.get("id") ?? "reparo-torneira";
+  const projectId = params.get("id") ?? "";
   const initialTab = params.get("tab") === "tutorial" ? "tutorial" : "itens";
 
   const [storeId, setStoreId] = useState("es-vitoria");
@@ -96,17 +83,17 @@ function ListaInner() {
   const [doneSteps, setDoneSteps] = useState<Record<number, boolean>>({});
   const [includeInstall, setIncludeInstall] = useState(false);
   const [eslItem, setEslItem] = useState<ProjectItem | null>(null);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     const currentStore = getSelectedStoreId();
     setStoreId(currentStore);
 
     const loadProject = (stId: string) => {
-      const stored = getDynamicProject(projectId);
-      const base =
-        stored ??
-        getPresetProject(projectId, stId) ??
-        getPresetProject("reparo-torneira", stId)!;
+      const base = getDynamicProject(projectId) ?? getPresetProject(projectId, stId);
+      // Id desconhecido: avisar em vez de mostrar uma lista de torneira que o cliente nao pediu.
+      setMissing(!base);
+      if (!base) return;
       const defaultTier: BudgetTierId =
         base.activeTier ??
         (base.id.includes("reparo-torneira") || base.id.includes("troca-resistencia")
@@ -146,12 +133,13 @@ function ListaInner() {
   }, [project, includedOptionals]);
 
   const tiers = useMemo(
-    () => (project ? getTiersForIntent(project.sourceIntent) : []),
+    // Projeto calculado por medida (pintura) perderia a quantidade ao trocar para a lista fixa da faixa.
+    () => (project && !project.calculationNote ? getTiersForIntent(project.sourceIntent) : []),
     [project]
   );
 
   const installService = useMemo(
-    () => getInstallServiceForIntent(project?.sourceIntent ?? "torneira"),
+    () => (project ? getInstallServiceForIntent(project.sourceIntent) : undefined),
     [project]
   );
 
@@ -160,7 +148,7 @@ function ListaInner() {
     [activeItems]
   );
 
-  const grandTotal = materialsTotal + (includeInstall ? installService.price : 0);
+  const grandTotal = materialsTotal + (includeInstall && installService ? installService.price : 0);
 
   const uniqueAisles = useMemo(
     () => Array.from(new Set(activeItems.filter((i) => i.inStock).map((i) => i.aisle))),
@@ -217,34 +205,21 @@ function ListaInner() {
     if (!subId) return;
     const subProd = getProductById(subId);
     if (!subProd) return;
-    const subStock = getStockForStore(subProd, storeId);
+    const [replacement] = materializeProjectItems(
+      [
+        {
+          productId: subProd.id,
+          quantity: equivalentQuantity(item.quantity, item.unit, subProd.unit),
+          optional: item.optional,
+          reason: "Substituto em estoque",
+        },
+      ],
+      storeId
+    );
 
     persist({
       ...project,
-      items: project.items.map((it) =>
-        it.productId === item.productId
-          ? {
-              ...it,
-              productId: subProd.id,
-              name: subProd.name,
-              brand: subProd.brand,
-              leroyExclusive: subProd.leroyExclusive,
-              imageUrl: subProd.imageUrl,
-              sku: subProd.sku,
-              category: subProd.category,
-              price: subProd.price,
-              unit: subProd.unit,
-              aisle: subProd.aisle,
-              corridorCode: subProd.corridorCode,
-              shelfLocation: subProd.shelfLocation,
-              stockQty: subStock,
-              inStock: subStock > 0,
-              reason: `Substituto em estoque`,
-              substituteId: undefined,
-              substituteName: undefined,
-            }
-          : it
-      ),
+      items: project.items.map((it) => (it.productId === item.productId ? replacement : it)),
     });
 
     trackEvent({
@@ -334,6 +309,7 @@ function ListaInner() {
   }
 
   function toggleInstallService() {
+    if (!installService) return;
     const next = !includeInstall;
     setIncludeInstall(next);
     if (next) {
@@ -364,15 +340,28 @@ function ListaInner() {
     return (
       <div className="flex min-h-screen flex-col bg-floor">
         <StoreBar />
-        <div className="flex flex-1 items-center justify-center text-[13.5px] text-signage-muted">
-          Carregando lista…
-        </div>
+        {missing ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-[14px] font-semibold text-signage">Não encontrei essa lista neste aparelho.</p>
+            <p className="text-[12.5px] text-signage-muted">Ela pode ter sido criada em outro celular. Descreva o projeto de novo que o Copiloto monta em segundos.</p>
+            <Link href="/chat" className="btn-accent">Abrir o Copiloto</Link>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-[13.5px] text-signage-muted">
+            Carregando lista…
+          </div>
+        )}
       </div>
     );
   }
 
   const activeStore = getStoreById(storeId);
   const activeTierObj = tiers.find((t) => t.id === project.activeTier);
+  // Mesma ordem da rota do mapa: a lista vira roteiro de coleta corredor a corredor.
+  const routeOrder = optimizeAisleOrder(Array.from(new Set(project.items.map((i) => i.aisle))));
+  const itemsByRoute = [...project.items].sort(
+    (a, b) => routeOrder.indexOf(a.aisle) - routeOrder.indexOf(b.aisle)
+  );
   const progressPct =
     activeItems.length > 0
       ? Math.round((checkedCount / activeItems.length) * 100)
@@ -411,7 +400,7 @@ function ListaInner() {
               <div className="flex items-baseline justify-between">
                 <span className="text-[11.5px] text-white/65">Total estimado</span>
                 <span className="font-mono text-[11px] text-white/65">
-                  {checkedCount}/{activeItems.length} no carrinho
+                  {checkedCount}/{activeItems.length} coletados
                 </span>
               </div>
               <div className="mt-1 font-mono text-[26px] font-extrabold leading-none tabular-nums text-leroy">
@@ -429,7 +418,7 @@ function ListaInner() {
       </section>
 
       <main className="container-wide flex-1 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* COLUNA PRINCIPAL (8 cols) */}
           <div className="space-y-4 lg:col-span-8">
             {/* Barra enxuta: Nível de orçamento (segmented control) + Abas */}
@@ -470,6 +459,7 @@ function ListaInner() {
                         key={tier.id}
                         type="button"
                         onClick={() => switchTier(tier.id)}
+                        aria-pressed={active}
                         className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
                           active
                             ? "bg-leroy text-signage"
@@ -496,14 +486,30 @@ function ListaInner() {
             {/* ABA 1: LISTA DE ITENS (LIMPA E ESCANEÁVEL) */}
             {activeTab === "itens" && (
               <div className="space-y-2.5">
-                {project.items.map((item) => {
+                {itemsByRoute.map((item, idx) => {
                   const isOptionalExcluded =
                     Boolean(item.optional) && !includedOptionals[item.productId];
                   const isChecked = Boolean(checkedIds[item.productId]);
+                  const group =
+                    idx === 0 || itemsByRoute[idx - 1].aisle !== item.aisle
+                      ? itemsByRoute.filter(
+                          (i) => i.aisle === item.aisle && (!i.optional || includedOptionals[i.productId])
+                        )
+                      : null;
 
                   return (
+                    <Fragment key={item.productId}>
+                    {group && (
+                      <h3 className={`flex items-center gap-2 ${idx > 0 ? "pt-2" : ""}`}>
+                        <span className="aisle-plate">Corredor {item.corridorCode ?? corridorOf(item.aisle)}</span>
+                        {group.length > 0 && (
+                          <span className="text-[12px] font-medium text-signage-muted">
+                            {group.filter((i) => checkedIds[i.productId]).length}/{group.length} coletados
+                          </span>
+                        )}
+                      </h3>
+                    )}
                     <div
-                      key={item.productId}
                       className={`rounded-xl border bg-white p-3.5 transition ${
                         isChecked
                           ? "border-leroy bg-leroy-soft/20"
@@ -512,13 +518,14 @@ function ListaInner() {
                           : "border-rule"
                       }`}
                     >
-                      <div className="flex items-center gap-3.5">
+                      <div className="flex flex-wrap items-center gap-3.5 sm:flex-nowrap">
                         {!isOptionalExcluded && (
                           <button
                             type="button"
                             onClick={() => toggleChecked(item)}
-                            aria-label={`Marcar ${item.name} no carrinho`}
-                            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 transition ${
+                            aria-label={`Marcar ${item.name} como coletado`}
+                            aria-pressed={isChecked}
+                            className={`relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 transition before:absolute before:-inset-2.5 before:content-[''] ${
                               isChecked
                                 ? "border-leroy bg-leroy text-signage"
                                 : "border-rule-strong bg-white hover:border-signage"
@@ -557,6 +564,10 @@ function ListaInner() {
                             {item.name}
                           </div>
 
+                          {item.reason && (
+                            <div className="mt-0.5 text-[12px] text-signage-muted">{item.reason}</div>
+                          )}
+
                           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-signage-muted">
                             <span className="font-mono font-bold text-signage">
                               {item.corridorCode ?? item.aisle}
@@ -579,7 +590,7 @@ function ListaInner() {
                         </div>
 
                         {/* Preço + Ações à direita */}
-                        <div className="flex flex-shrink-0 flex-col items-end gap-2">
+                        <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-col sm:items-end">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-[15px] font-extrabold tabular-nums text-signage">
                               {formatBRL(item.price * item.quantity)}
@@ -590,7 +601,7 @@ function ListaInner() {
                                 onClick={() => removeItem(item.productId)}
                                 title="Remover item"
                                 aria-label={`Remover ${item.name}`}
-                                className="rounded p-1 text-signage-subtle transition hover:bg-danger-soft hover:text-danger"
+                                className="rounded p-2 text-signage-muted transition hover:bg-danger-soft hover:text-danger"
                               >
                                 <CloseIcon size={13} />
                               </button>
@@ -602,11 +613,11 @@ function ListaInner() {
                               <button
                                 type="button"
                                 onClick={() => setEslItem(item)}
-                                title="Piscar etiqueta ESL na prateleira"
-                                className="inline-flex h-7 items-center gap-1 rounded-md border border-leroy/60 bg-leroy-soft px-2 font-mono text-[10.5px] font-bold text-leroy-deep transition hover:bg-leroy hover:text-signage"
+                                title="Acender a etiqueta do produto na prateleira"
+                                className="inline-flex h-10 items-center gap-1.5 rounded-md border border-leroy/60 bg-leroy-soft px-3 text-[12.5px] font-bold text-leroy-deep transition hover:bg-leroy hover:text-signage"
                               >
-                                <RadioIcon size={11} />
-                                ESL
+                                <RadioIcon size={14} />
+                                Localizar
                               </button>
                             )}
 
@@ -619,7 +630,7 @@ function ListaInner() {
                                     [item.productId]: !prev[item.productId],
                                   }))
                                 }
-                                className={`h-7 rounded-md px-2.5 text-[11.5px] font-semibold transition ${
+                                className={`h-10 rounded-md px-3 text-[12.5px] font-semibold transition ${
                                   isOptionalExcluded
                                     ? "bg-signage text-white"
                                     : "bg-leroy-soft text-leroy-deep"
@@ -628,25 +639,25 @@ function ListaInner() {
                                 {isOptionalExcluded ? "+ Incluir" : "Incluído"}
                               </button>
                             ) : (
-                              <div className="inline-flex h-7 items-center rounded-md border border-rule bg-floor">
+                              <div className="inline-flex h-10 items-center rounded-md border border-rule bg-floor">
                                 <button
                                   type="button"
                                   onClick={() => updateQty(item.productId, -1)}
-                                  aria-label="Diminuir"
-                                  className="px-1.5 text-signage-muted hover:text-signage"
+                                  aria-label={`Diminuir quantidade de ${item.name}`}
+                                  className="flex h-10 w-10 items-center justify-center text-signage-muted hover:text-signage"
                                 >
-                                  <MinusIcon size={11} />
+                                  <MinusIcon size={14} />
                                 </button>
-                                <span className="min-w-[20px] text-center font-mono text-[11.5px] font-bold text-signage">
+                                <span className="min-w-[20px] text-center font-mono text-[13px] font-bold text-signage">
                                   {item.quantity}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => updateQty(item.productId, 1)}
-                                  aria-label="Aumentar"
-                                  className="px-1.5 text-signage-muted hover:text-signage"
+                                  aria-label={`Aumentar quantidade de ${item.name}`}
+                                  className="flex h-10 w-10 items-center justify-center text-signage-muted hover:text-signage"
                                 >
-                                  <PlusIcon size={11} />
+                                  <PlusIcon size={14} />
                                 </button>
                               </div>
                             )}
@@ -672,6 +683,7 @@ function ListaInner() {
                         </div>
                       )}
                     </div>
+                    </Fragment>
                   );
                 })}
               </div>
@@ -753,7 +765,7 @@ function ListaInner() {
               >
                 <div className="flex items-center gap-2 text-[12.5px] font-bold">
                   <ShieldCheckIcon size={15} className="text-leroy" />
-                  Auditoria Anti-2ª Viagem
+                  Conferência da lista
                 </div>
                 <span className="font-mono text-[12px] font-extrabold">
                   {audit.score}%
@@ -819,41 +831,43 @@ function ListaInner() {
             </div>
 
             {/* Leroy Merlin Instala (compacto) */}
-            <div className="panel p-4">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold text-signage">
-                  <WrenchIcon size={14} className="text-leroy-dark" />
-                  Leroy Merlin Instala
-                </span>
-                <span className="font-mono text-[15px] font-extrabold text-signage">
-                  {formatBRL(installService.price)}
-                </span>
+            {installService && (
+              <div className="panel p-4">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 text-[13.5px] font-bold text-signage">
+                    <WrenchIcon size={14} className="text-leroy-dark" />
+                    Leroy Merlin Instala
+                  </span>
+                  <span className="font-mono text-[15px] font-extrabold text-signage">
+                    {formatBRL(installService.price)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[12px] text-signage-muted">
+                  {installService.title.replace("Leroy Merlin Instala · ", "")} com garantia de 12 meses.
+                </p>
+                <button
+                  type="button"
+                  onClick={toggleInstallService}
+                  className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-semibold transition ${
+                    includeInstall
+                      ? "bg-leroy text-signage"
+                      : "border border-rule-strong bg-floor text-signage hover:border-signage hover:bg-white"
+                  }`}
+                >
+                  {includeInstall ? (
+                    <>
+                      <CheckIcon size={14} strokeWidth={2.5} />
+                      Instalação incluída
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon size={14} />
+                      Incluir instalação
+                    </>
+                  )}
+                </button>
               </div>
-              <p className="mt-1 text-[12px] text-signage-muted">
-                {installService.title.replace("Leroy Merlin Instala · ", "")} com garantia de 12 meses.
-              </p>
-              <button
-                type="button"
-                onClick={toggleInstallService}
-                className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-semibold transition ${
-                  includeInstall
-                    ? "bg-leroy text-signage"
-                    : "border border-rule-strong bg-floor text-signage hover:border-signage hover:bg-white"
-                }`}
-              >
-                {includeInstall ? (
-                  <>
-                    <CheckIcon size={14} strokeWidth={2.5} />
-                    Instalação incluída
-                  </>
-                ) : (
-                  <>
-                    <PlusIcon size={14} />
-                    Incluir instalação
-                  </>
-                )}
-              </button>
-            </div>
+            )}
 
             {/* CTAs */}
             <div className="space-y-2">

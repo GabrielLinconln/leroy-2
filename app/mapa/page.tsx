@@ -37,7 +37,7 @@ export default function MapaPage() {
 
 function MapaInner() {
   const params = useSearchParams();
-  const projectId = params.get("id") ?? "reparo-torneira";
+  const projectId = params.get("id") ?? "";
 
   const [storeId, setStoreId] = useState("es-vitoria");
   const [project, setProject] = useState<DynamicProjectList | null>(null);
@@ -47,16 +47,14 @@ function MapaInner() {
   const [completed, setCompleted] = useState(false);
   const [navStartTs, setNavStartTs] = useState<number>(0);
   const [eslItem, setEslItem] = useState<ProjectItem | null>(null);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     const currentStore = getSelectedStoreId();
     setStoreId(currentStore);
 
-    const stored = getDynamicProject(projectId);
-    const loaded =
-      stored ??
-      getPresetProject(projectId, currentStore) ??
-      getPresetProject("reparo-torneira", currentStore)!;
+    const loaded = getDynamicProject(projectId) ?? getPresetProject(projectId, currentStore);
+    setMissing(!loaded);
     setProject(loaded);
 
     const onStore = (e: Event) => {
@@ -142,9 +140,17 @@ function MapaInner() {
     return (
       <div className="flex min-h-screen flex-col bg-floor">
         <StoreBar />
-        <div className="flex flex-1 items-center justify-center font-mono text-[13px] text-signage-muted">
-          Calculando rota ortogonal…
-        </div>
+        {missing ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-[14px] font-semibold text-signage">Não encontrei essa lista neste aparelho.</p>
+            <p className="text-[12.5px] text-signage-muted">Ela pode ter sido criada em outro celular. Descreva o projeto de novo que o Copiloto monta em segundos.</p>
+            <Link href="/chat" className="btn-accent">Abrir o Copiloto</Link>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center font-mono text-[13px] text-signage-muted">
+            Calculando rota…
+          </div>
+        )}
       </div>
     );
   }
@@ -165,7 +171,7 @@ function MapaInner() {
         <div className="container-wide flex flex-wrap items-center justify-between gap-4 py-5">
           <div>
             <div className="flex items-center gap-2 font-mono text-[10.5px] font-bold uppercase tracking-wider text-leroy-deep">
-              <span>NAVEGAÇÃO + ESL PICK-TO-LIGHT</span>
+              <span>Sua rota na loja</span>
               <span>·</span>
               <span>{activeStore.shortName}</span>
             </div>
@@ -187,7 +193,7 @@ function MapaInner() {
       </section>
 
       <main className="container-wide flex-1 py-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Mapa 2D (7 cols) */}
           <div className="space-y-5 lg:col-span-7">
             <StoreMap
@@ -195,7 +201,6 @@ function MapaInner() {
               activeStopIndex={navActive ? stopIndex : null}
               completedAisles={completedAisles}
               onSelectAisle={jumpToAisle}
-              storeLabel={`${activeStore.name} (${activeStore.shortName})`}
             />
 
             {/* Card de Navegação Ativa + ESL Pick-to-Light */}
@@ -234,8 +239,8 @@ function MapaInner() {
                         <span className="kicker">
                           Itens nesta gôndola · Último Metro
                         </span>
-                        <span className="font-mono text-[10px] font-bold text-leroy-deep">
-                          TOQUE EM PISCAR ESL
+                        <span className="font-mono text-[11px] font-bold text-leroy-deep">
+                          TOQUE EM LOCALIZAR
                         </span>
                       </div>
 
@@ -377,7 +382,7 @@ function MapaInner() {
               <div className="border-b border-rule bg-floor px-4 py-3">
                 <span className="kicker">Roteiro de Coleta</span>
                 <h2 className="font-display text-[16px] font-bold text-signage">
-                  Paradas otimizadas (clique para focar)
+                  Paradas na ordem certa (toque para ver)
                 </h2>
               </div>
 
@@ -451,21 +456,21 @@ function MapaInner() {
                                     className="p-0.5"
                                   />
                                   <div className="min-w-0 flex-1">
-                                    <div className="truncate font-semibold text-signage">
+                                    <div className="line-clamp-2 font-semibold leading-snug text-signage">
                                       {it.quantity}× {it.name}
                                     </div>
-                                    <div className="font-mono text-[10px] text-signage-subtle">
+                                    <div className="text-[12px] text-signage-muted">
                                       {it.shelfLocation}
                                     </div>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => setEslItem(it)}
-                                    title="Piscar etiqueta ESL na prateleira"
-                                    className="inline-flex flex-shrink-0 items-center gap-1 rounded bg-leroy-soft px-2 py-1 font-mono text-[10px] font-bold text-leroy-deep hover:bg-leroy hover:text-signage"
+                                    title="Acender a etiqueta do produto na prateleira"
+                                    className="inline-flex h-10 flex-shrink-0 items-center gap-1.5 rounded-md border border-leroy/60 bg-leroy-soft px-3 text-[12.5px] font-bold text-leroy-deep hover:bg-leroy hover:text-signage"
                                   >
-                                    <RadioIcon size={11} />
-                                    ESL
+                                    <RadioIcon size={14} />
+                                    Localizar
                                   </button>
                                 </div>
                               ))}
@@ -491,7 +496,7 @@ function MapaInner() {
                 className="btn-secondary !py-2.5 !text-[12.5px]"
               >
                 <ArrowLeftIcon size={14} />
-                Lista & Auditoria
+                Voltar à lista
               </Link>
               <Link href="/chat" className="btn-primary !py-2.5 !text-[12.5px]">
                 Novo diagnóstico

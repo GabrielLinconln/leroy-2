@@ -33,6 +33,7 @@ import {
   HandoffTicket,
   HandoffTicketStatus,
 } from "@/lib/types";
+import { corridorOf } from "@/lib/storeMap";
 
 type PanelTab = "atendimento" | "planta" | "dados";
 
@@ -104,15 +105,34 @@ export default function PainelPage() {
   const [tickets, setTickets] = useState<HandoffTicket[]>([]);
   const [companionQuery, setCompanionQuery] = useState("chuveiro 220v wago");
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [demo, setDemo] = useState(false);
+  const [storage, setStorage] = useState<string | null>(null);
 
-  const reload = () => {
-    setEvents(getStoredEvents());
-    setTickets(getStoredTickets());
+  // Fonte e o servidor (todos os aparelhos da loja); offline, o que este aparelho registrou.
+  const reload = async () => {
+    try {
+      const [evRes, tkRes] = await Promise.all([fetch("/api/analytics"), fetch("/api/handoff")]);
+      if (!evRes.ok || !tkRes.ok) throw new Error(`HTTP ${evRes.status}/${tkRes.status}`);
+      const ev = await evRes.json();
+      const tk = await tkRes.json();
+      setEvents(ev.events);
+      setDemo(ev.demo);
+      setStorage(ev.storage);
+      // Chamado de exemplo nao existe no servidor: manter o status mudado aqui.
+      setTickets((prev) => (tk.demo && prev.length > 0 ? prev : tk.tickets));
+    } catch {
+      setEvents(getStoredEvents());
+      setTickets(getStoredTickets());
+      setStorage(null);
+    }
   };
 
   useEffect(() => {
     setStoreId(getSelectedStoreId());
     reload();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) reload();
+    }, 5000);
 
     const onStore = (e: Event) => {
       const next = (e as CustomEvent<string>).detail;
@@ -121,6 +141,7 @@ export default function PainelPage() {
     window.addEventListener("lm:store-changed", onStore);
     window.addEventListener("lm:telemetry-updated", reload);
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener("lm:store-changed", onStore);
       window.removeEventListener("lm:telemetry-updated", reload);
     };
@@ -143,8 +164,8 @@ export default function PainelPage() {
   const openTicketsCount = tickets.filter((t) => t.status !== "resolvido").length;
 
   function changeTicketStatus(ticketId: string, status: HandoffTicketStatus) {
-    const updated = updateHandoffTicketStatus(ticketId, status);
-    setTickets(updated);
+    updateHandoffTicketStatus(ticketId, status);
+    setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status } : t)));
     fetch("/api/handoff", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -159,7 +180,8 @@ export default function PainelPage() {
     a.href = url;
     a.download = fileName;
     a.click();
-    URL.revokeObjectURL(url);
+    // Revogar no mesmo tick cancela o download no Safari e no Firefox.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function exportJson() {
@@ -227,16 +249,23 @@ export default function PainelPage() {
       </section>
 
       <main className="container-wide flex-1 space-y-6 py-6">
+        {demo && (
+          <p role="status" className="rounded-lg border border-amberwarn bg-amberwarn-soft px-3.5 py-2.5 text-[12.5px] text-signage">
+            <strong>Dados de exemplo.</strong> Ainda não há eventos reais nesta instalação; os números abaixo
+            são trocados pelos reais assim que o primeiro cliente usar o app.
+          </p>
+        )}
+
         {/* 4 KPIs principais (espaçados e legíveis) */}
         <section className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
           <KpiCard
-            label="Jornadas hoje"
+            label="Jornadas"
             value={String(summary.totalJourneys)}
             sub={`${summary.liveEventsCount} eventos registrados`}
           />
           <KpiCard
             label="Autoatendimento"
-            value={`${summary.autonomyRate}%`}
+            value={summary.autonomyRate === null ? "—" : `${summary.autonomyRate}%`}
             sub="Resolvidos sem fila"
             accent
           />
@@ -249,14 +278,14 @@ export default function PainelPage() {
           <KpiCard
             label="Chamados ativos"
             value={String(openTicketsCount)}
-            sub="Na fila de handoff"
+            sub="Aguardando vendedor"
             Icon={UserCheckIcon}
           />
         </section>
 
         {/* Navegação em 3 abas focadas (zero sobrecarga cognitiva) */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-3">
-          <div className="inline-flex rounded-xl border border-rule-strong bg-white p-1">
+          <div className="flex w-full overflow-x-auto rounded-xl border border-rule-strong bg-white p-1 sm:inline-flex sm:w-auto">
             <TabButton
               active={activeTab === "atendimento"}
               onClick={() => setActiveTab("atendimento")}
@@ -268,7 +297,7 @@ export default function PainelPage() {
               active={activeTab === "planta"}
               onClick={() => setActiveTab("planta")}
               icon={<MapIcon size={14} />}
-              label="Planta & Estoque"
+              label="Planta"
               badge={
                 summary.outOfStockAlerts.length > 0
                   ? String(summary.outOfStockAlerts.length)
@@ -279,7 +308,7 @@ export default function PainelPage() {
               active={activeTab === "dados"}
               onClick={() => setActiveTab("dados")}
               icon={<ChartIcon size={14} />}
-              label="Dados & Eventos"
+              label="Dados"
             />
           </div>
 
@@ -294,11 +323,11 @@ export default function PainelPage() {
 
         {/* ===== ABA 1: ATENDIMENTO (FILA DE HANDOFF + BUSCA COMPANION) ===== */}
         {activeTab === "atendimento" && (
-          <section className="grid gap-6 lg:grid-cols-12">
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Fila de Handoff (7 cols) */}
             <div className="space-y-3 lg:col-span-7">
               <h2 className="font-display text-[17px] font-bold text-signage">
-                Fila de Handoff Humano
+                Chamados de clientes
               </h2>
 
               {tickets.map((ticket) => {
@@ -312,7 +341,7 @@ export default function PainelPage() {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="aisle-plate">{ticket.aisle}</span>
+                        <span className="aisle-plate">{corridorOf(ticket.aisle)}</span>
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.badgeClass}`}
                         >
@@ -393,7 +422,7 @@ export default function PainelPage() {
                     Busca Rápida do Vendedor
                   </h2>
                   <span className="font-mono text-[10px] font-semibold uppercase text-leroy-deep">
-                    Companion
+                    Corredor + estoque
                   </span>
                 </div>
                 <p className="mt-1 text-[12.5px] text-signage-muted">
@@ -443,12 +472,12 @@ export default function PainelPage() {
                         <div className="truncate text-[13px] font-semibold text-signage">
                           {product.name}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-signage-muted">
+                        <div className="mt-0.5 truncate text-[11px] text-signage-muted">
                           <span className="font-mono font-bold text-signage">
                             {product.corridorCode}
                           </span>
-                          <span>·</span>
-                          <span>{product.shelfLocation}</span>
+                          {" · "}
+                          {product.shelfLocation}
                         </div>
                       </div>
                       <div className="flex-shrink-0 text-right">
@@ -473,7 +502,7 @@ export default function PainelPage() {
 
         {/* ===== ABA 2: PLANTA 2D & ESTOQUE ===== */}
         {activeTab === "planta" && (
-          <section className="grid gap-6 lg:grid-cols-12">
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <StoreMap heatmapCounts={summary.aisleHeatMap} />
             </div>
@@ -491,6 +520,9 @@ export default function PainelPage() {
                 </div>
 
                 <ul className="mt-4 divide-y divide-rule">
+                  {summary.outOfStockAlerts.length === 0 && (
+                    <li className="py-3 text-[13px] text-signage-muted">Nenhuma ruptura registrada.</li>
+                  )}
                   {summary.outOfStockAlerts.map((al) => (
                     <li
                       key={al.productName}
@@ -513,7 +545,7 @@ export default function PainelPage() {
         {/* ===== ABA 3: DADOS & EVENTOS ===== */}
         {activeTab === "dados" && (
           <section className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-12">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
               <div className="panel p-5 lg:col-span-7">
                 <h2 className="font-display text-[17px] font-bold text-signage">
                   Principais dores coletadas
@@ -541,6 +573,22 @@ export default function PainelPage() {
                     );
                   })}
                 </div>
+
+                <h3 className="mt-6 font-display text-[15px] font-bold text-signage">
+                  Demanda não atendida
+                </h3>
+                <p className="text-[12px] text-signage-muted">O que clientes pediram e o catálogo não tinha.</p>
+                <ul className="mt-2 divide-y divide-rule">
+                  {summary.topUnmet.length === 0 && (
+                    <li className="py-2.5 text-[13px] text-signage-muted">Nada registrado ainda.</li>
+                  )}
+                  {summary.topUnmet.map((u) => (
+                    <li key={u.need} className="flex items-center justify-between gap-2 py-2.5 text-[13px]">
+                      <span className="min-w-0 break-words font-medium text-signage">{u.need}</span>
+                      <span className="flex-shrink-0 font-mono text-[12px] font-bold text-signage-muted">{u.count}×</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               <div className="panel flex flex-col justify-between p-5 lg:col-span-5">
@@ -561,11 +609,23 @@ export default function PainelPage() {
                   <MetricRow
                     icon={<ChartIcon size={15} className="text-leroy-dark" />}
                     label="Tempo médio de diagnóstico"
-                    value={`${summary.avgDiagnosisSec}s`}
+                    value={summary.avgDiagnosisSec === null ? "—" : `${summary.avgDiagnosisSec}s`}
+                  />
+                  <MetricRow
+                    icon={<ShieldCheckIcon size={15} className="text-leroy-dark" />}
+                    label="Respostas pela IA (resto: motor local)"
+                    value={
+                      summary.aiReplies.total === 0
+                        ? "—"
+                        : `${Math.round(((summary.aiReplies.total - summary.aiReplies.local) / summary.aiReplies.total) * 100)}%`
+                    }
                   />
                 </div>
                 <div className="mt-4 rounded-lg bg-floor px-3 py-2 font-mono text-[11px] text-signage-muted">
-                  Endpoint ativo: <strong className="text-signage">/api/analytics</strong>
+                  Dados em:{" "}
+                  <strong className="text-signage">
+                    {storage === "postgres" ? "Postgres (Neon)" : storage === "memoria" ? "memória do servidor" : "este aparelho (offline)"}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -607,7 +667,7 @@ export default function PainelPage() {
                         <td className="py-2.5 pr-4 text-signage">{ev.label}</td>
                         <td className="whitespace-nowrap py-2.5 pr-4">
                           {ev.aisle ? (
-                            <span className="aisle-plate">{ev.aisle}</span>
+                            <span className="aisle-plate">{corridorOf(ev.aisle)}</span>
                           ) : (
                             <span className="text-signage-subtle">—</span>
                           )}
@@ -645,7 +705,8 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition ${
+      aria-pressed={active}
+      className={`inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-semibold transition sm:flex-none sm:px-3.5 ${
         active
           ? "bg-signage text-white shadow-sm"
           : "text-signage-muted hover:text-signage"
@@ -655,7 +716,7 @@ function TabButton({
       <span>{label}</span>
       {badge && (
         <span
-          className={`rounded-full px-1.5 py-0.2 font-mono text-[10.5px] font-bold ${
+          className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] font-bold ${
             active
               ? "bg-leroy text-signage"
               : "bg-floor text-signage-muted"

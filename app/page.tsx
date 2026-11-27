@@ -61,6 +61,14 @@ const QUICK_SCENARIOS = [
   },
 ];
 
+const COMMON_REQUESTS = [
+  "Pia entupida",
+  "Descarga não para de encher",
+  "Rejunte do box mofado",
+  "Portão de ferro enferrujado",
+  "Porta rangendo",
+];
+
 const FEATURED_PRODUCT_IDS = [
   "hid-torneira-mono",
   "fer-furadeira",
@@ -129,7 +137,7 @@ export default function StoreModeHomePage() {
             <span className="h-2 w-2 rounded-full bg-leroy" />
             <MapPinIcon size={12} className="text-leroy" />
             <span className="truncate">
-              {activeStore.name} · {activeStore.address}
+              Você está na <strong className="font-semibold text-white">{activeStore.name}</strong> · {activeStore.address}
             </span>
           </div>
 
@@ -157,7 +165,7 @@ export default function StoreModeHomePage() {
                 type="text"
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder='Ex: "torneira pingando", "pintar quarto 3x4m", "bucha drywall"…'
+                placeholder="Ex: torneira pingando"
                 className="h-11 w-full rounded-lg bg-signage pl-10 pr-3 text-[14px] text-white outline-none ring-1 ring-white/10 transition placeholder:text-white/40 focus:ring-leroy"
               />
             </div>
@@ -181,6 +189,20 @@ export default function StoreModeHomePage() {
               </button>
             </div>
           </form>
+
+          <div role="group" aria-labelledby="pedidos-comuns" className="mt-3 flex max-w-[780px] flex-wrap items-center gap-2">
+            <span id="pedidos-comuns" className="text-[12px] text-white/60">Pedidos comuns:</span>
+            {COMMON_REQUESTS.map((req) => (
+              <button
+                key={req}
+                type="button"
+                onClick={() => launchQuery(req)}
+                className="inline-flex min-h-[44px] items-center rounded-md border border-white/20 px-3 text-[12.5px] font-medium text-white/85 transition hover:border-leroy hover:text-leroy"
+              >
+                {req}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -215,7 +237,7 @@ export default function StoreModeHomePage() {
                   />
                 </div>
                 <div className="mt-4">
-                  <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signage-subtle">
+                  <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-signage-muted">
                     {sector}
                   </div>
                   <div className="mt-0.5 font-display text-[15px] font-bold leading-snug text-signage group-hover:text-leroy-deep">
@@ -266,11 +288,11 @@ export default function StoreModeHomePage() {
                   <div className="flex flex-1 flex-col justify-between p-3.5">
                     <div>
                       <div className="flex items-center gap-1.5 text-[10.5px]">
-                        <span className="font-mono font-bold uppercase tracking-wider text-signage-subtle">
+                        <span className="font-mono font-bold uppercase tracking-wider text-signage-muted">
                           {prod.brand}
                         </span>
                         {prod.leroyExclusive && (
-                          <span className="font-mono text-[9.5px] font-semibold text-leroy-deep">
+                          <span className="font-mono text-[10.5px] font-semibold text-leroy-deep">
                             · Exclusivo
                           </span>
                         )}
@@ -284,7 +306,7 @@ export default function StoreModeHomePage() {
                       <span className="font-mono text-[15px] font-extrabold tabular-nums text-signage">
                         {formatBRL(prod.price)}
                       </span>
-                      <span className="text-[11px] font-medium text-signage-subtle">
+                      <span className="text-[11px] font-medium text-signage-muted">
                         {qty} un.
                       </span>
                     </div>
@@ -306,7 +328,7 @@ export default function StoreModeHomePage() {
             </div>
             <div className="min-w-0">
               <div className="font-display text-[14.5px] font-bold text-signage group-hover:text-leroy-deep">
-                Planta 2D & Etiquetas ESL
+                Mapa da loja e etiqueta que acende
               </div>
               <div className="text-[12px] text-signage-muted">
                 Mapa de corredores de {activeStore.shortName}
@@ -323,10 +345,10 @@ export default function StoreModeHomePage() {
             </div>
             <div className="min-w-0">
               <div className="font-display text-[14.5px] font-bold text-signage group-hover:text-leroy-deep">
-                Lista Auditada (Demo)
+                Exemplo de lista pronta
               </div>
               <div className="text-[12px] text-signage-muted">
-                Compatibilidade + 3 níveis de orçamento
+                Peças que combinam, em 3 faixas de preço
               </div>
             </div>
           </Link>
@@ -344,7 +366,7 @@ export default function StoreModeHomePage() {
                   Console do Vendedor
                 </div>
                 <div className="text-[12px] text-white/65">
-                  Handoff, mapa de calor e dados
+                  Chamados, mapa de calor e dados
                 </div>
               </div>
             </div>
@@ -361,7 +383,7 @@ export default function StoreModeHomePage() {
         <div className="container-wide flex flex-wrap items-center justify-between gap-2 text-[12px] text-signage-subtle">
           <span>
             <strong className="font-semibold text-signage">LM Copiloto</strong> ·{" "}
-            {activeStore.name} · Challenge FIAP 2026 (Tech_01)
+            {activeStore.name} · Challenge FIAP 2026 (Tech_01) · Protótipo: preços de referência, estoque e planta ilustrativos
           </span>
           <div className="flex items-center gap-4">
             <Link href="/catalogo" className="hover:text-signage">

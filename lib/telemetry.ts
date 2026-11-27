@@ -116,7 +116,7 @@ export const SEED_EVENTS: AnalyticsEvent[] = [
     type: "esl_blink_triggered",
     storeId: "es-vitoria",
     timestamp: hoursAgo(0.9),
-    label: "ESL Pick-to-Light acionado: Conector Wago 221 32A (E1 · Mód. 04)",
+    label: "ESL Pick-to-Light acionado: Conector de Emenda Wago (E1 · Mód. 04)",
     aisle: "E1",
     painTopic: "Chuveiro / Resistência",
   },
@@ -213,6 +213,17 @@ export function getStoredEvents(): AnalyticsEvent[] {
   }
 }
 
+const STORAGE_SESSION_KEY = "lm_copiloto_session";
+
+function getSessionId(): string {
+  let id = window.sessionStorage.getItem(STORAGE_SESSION_KEY);
+  if (!id) {
+    id = crypto.randomUUID().slice(0, 13);
+    window.sessionStorage.setItem(STORAGE_SESSION_KEY, id);
+  }
+  return id;
+}
+
 export function trackEvent(input: {
   type: AnalyticsEventType;
   storeId?: string;
@@ -221,6 +232,8 @@ export function trackEvent(input: {
   painTopic?: string;
   productName?: string;
   durationSec?: number;
+  engine?: string;
+  unmet?: string;
 }): AnalyticsEvent {
   const event: AnalyticsEvent = {
     id: `ev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -232,6 +245,9 @@ export function trackEvent(input: {
     painTopic: input.painTopic,
     productName: input.productName,
     durationSec: input.durationSec,
+    sessionId: isBrowser() ? getSessionId() : undefined,
+    engine: input.engine,
+    unmet: input.unmet,
   };
 
   if (isBrowser()) {
@@ -271,12 +287,6 @@ export function saveHandoffTicket(ticket: HandoffTicket): void {
   const updated = [ticket, ...existing].slice(0, 40);
   window.localStorage.setItem(STORAGE_TICKETS_KEY, JSON.stringify(updated));
   window.dispatchEvent(new CustomEvent("lm:telemetry-updated"));
-
-  fetch("/api/handoff", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(ticket),
-  }).catch(() => {});
 }
 
 export function updateHandoffTicketStatus(
@@ -332,106 +342,71 @@ function normalizePainTopic(topic?: string): string | undefined {
   return PAIN_TOPIC_MAP[topic.toLowerCase()] ?? topic;
 }
 
-export function computeAnalyticsSummary(events: AnalyticsEvent[], tickets: HandoffTicket[]) {
-  const listsGenerated = events.filter((e) => e.type === "list_generated").length;
-  const visionScans = events.filter((e) => e.type === "vision_scan").length;
-  const navigationsCompleted = events.filter((e) => e.type === "navigation_completed").length;
-  const eslBlinks = events.filter((e) => e.type === "esl_blink_triggered").length;
-  const compatibilityFixed = events.filter((e) => e.type === "compatibility_fixed").length;
-  const installIntents = events.filter((e) => e.type === "install_service_added").length;
-  const handoffs = Math.max(
-    events.filter((e) => e.type === "handoff_requested").length,
-    tickets.length
-  );
-  const substitutions = events.filter((e) => e.type === "item_substituted").length;
-  const searches = events.filter((e) => e.type === "semantic_search").length;
+const JOURNEY_TYPES = new Set<AnalyticsEventType>([
+  "chat_message",
+  "voice_command",
+  "semantic_search",
+  "vision_scan",
+  "list_generated",
+  "handoff_requested",
+]);
 
-  const totalJourneys = Math.max(1, listsGenerated + handoffs + Math.ceil(searches * 0.5) + visionScans);
-  const autonomyRate = Math.min(
-    96,
-    Math.max(68, Math.round(((totalJourneys + 24 - handoffs) / (totalJourneys + 24)) * 100))
-  );
+function topCounts(values: Array<string | undefined>, limit: number) {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+/** Todo numero sai dos eventos recebidos; sem dado, null (o painel mostra "—"). */
+export function computeAnalyticsSummary(events: AnalyticsEvent[], tickets: HandoffTicket[]) {
+  const count = (type: AnalyticsEventType) => events.filter((e) => e.type === type).length;
+
+  // Jornada = uma visita (sessionId). Evento sem sessao, como os de exemplo, conta como uma.
+  const journeys = new Map<string, boolean>();
+  for (const e of events) {
+    if (!JOURNEY_TYPES.has(e.type)) continue;
+    const key = e.sessionId ?? e.id;
+    journeys.set(key, journeys.get(key) === true || e.type === "handoff_requested");
+  }
+  const totalJourneys = journeys.size;
+  const selfServed = Array.from(journeys.values()).filter((handoff) => !handoff).length;
 
   const durations = events
     .filter((e) => e.type === "list_generated" && typeof e.durationSec === "number")
     .map((e) => e.durationSec as number);
-  const avgDiagnosisSec =
-    durations.length > 0
-      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-      : 42;
 
-  const painCounts = new Map<string, number>();
-  for (const ev of events) {
-    const normalizedTopic = normalizePainTopic(ev.painTopic);
-    if (!normalizedTopic) continue;
-    painCounts.set(normalizedTopic, (painCounts.get(normalizedTopic) ?? 0) + 1);
-  }
-  const topPains = Array.from(painCounts.entries())
-    .map(([topic, count]) => ({ topic, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 6);
+  const aisleHeatMap: Record<string, number> = {};
+  for (const e of events) if (e.aisle) aisleHeatMap[e.aisle] = (aisleHeatMap[e.aisle] ?? 0) + 1;
 
-  // Mapa de calor espacial por corredor (base realista + eventos ao vivo)
-  const aisleHeatMap: Record<string, number> = {
-    H1: 4,
-    H2: 5,
-    H3: 9,
-    T1: 6,
-    T2: 8,
-    T3: 4,
-    F1: 5,
-    F2: 4,
-    F3: 7,
-    E1: 8,
-    E2: 3,
-    M4: 6,
-    L2: 3,
-  };
-  for (const ev of events) {
-    if (!ev.aisle) continue;
-    aisleHeatMap[ev.aisle] = (aisleHeatMap[ev.aisle] ?? 0) + 2;
-  }
-
-  const topAisles = Object.entries(aisleHeatMap)
-    .map(([aisle, count]) => ({ aisle, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 6);
-
-  const stockAlerts = new Map<string, number>([
-    ["Selador Acrílico Parede 3,6L", 5],
-    ["Cartucho Cerâmico 35mm Monocomando", 3],
-    ["Impermeabilizante Parede Úmida 3,6L", 2],
-  ]);
-  for (const ev of events) {
-    if (ev.type === "item_substituted" && ev.productName) {
-      stockAlerts.set(ev.productName, (stockAlerts.get(ev.productName) ?? 0) + 1);
-    }
-  }
-  const outOfStockAlerts = Array.from(stockAlerts.entries())
-    .map(([productName, hits]) => ({ productName, hits }))
-    .sort((a, b) => b.hits - a.hits);
+  const answered = events.filter((e) => e.engine);
+  const local = answered.filter((e) => e.engine === "local").length;
 
   return {
-    totalJourneys: totalJourneys + 34,
+    totalJourneys,
     liveEventsCount: events.length,
-    autonomyRate,
-    avgDiagnosisSec,
-    listsGenerated: listsGenerated + 22,
-    visionScans: visionScans + 12,
-    navigationsCompleted: navigationsCompleted + 16,
-    eslBlinks: eslBlinks + 19,
-    secondTripsPrevented: compatibilityFixed + substitutions + 14,
-    installIntents: installIntents + 7,
-    handoffs,
-    topPains,
-    topAisles,
+    autonomyRate: totalJourneys > 0 ? Math.round((selfServed / totalJourneys) * 100) : null,
+    avgDiagnosisSec:
+      durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null,
+    eslBlinks: count("esl_blink_triggered"),
+    secondTripsPrevented: count("compatibility_fixed") + count("item_substituted"),
+    installIntents: count("install_service_added"),
+    handoffs: Math.max(count("handoff_requested"), tickets.length),
+    topPains: topCounts(events.map((e) => normalizePainTopic(e.painTopic)), 6).map(({ key, count }) => ({ topic: key, count })),
     aisleHeatMap,
-    outOfStockAlerts,
+    outOfStockAlerts: topCounts(
+      events.filter((e) => e.type === "item_substituted").map((e) => e.productName),
+      6
+    ).map(({ key, count }) => ({ productName: key, hits: count })),
+    aiReplies: { total: answered.length, local },
+    topUnmet: topCounts(events.map((e) => e.unmet?.toLowerCase()), 5).map(({ key, count }) => ({ need: key, count })),
   };
 }
 
 export function eventsToCsv(events: AnalyticsEvent[]): string {
-  const header = "id,timestamp_iso,type,store_id,aisle,pain_topic,label";
+  const header = "id,timestamp_iso,type,store_id,session_id,engine,aisle,pain_topic,unmet,label";
   const rows = events.map((e) => {
     const esc = (v?: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
     return [
@@ -439,8 +414,11 @@ export function eventsToCsv(events: AnalyticsEvent[]): string {
       esc(new Date(e.timestamp).toISOString()),
       esc(e.type),
       esc(e.storeId),
+      esc(e.sessionId),
+      esc(e.engine),
       esc(e.aisle),
       esc(e.painTopic),
+      esc(e.unmet),
       esc(e.label),
     ].join(",");
   });

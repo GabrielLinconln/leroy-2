@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import { VISION_MODEL, isLlmEnabled } from "@/lib/llm";
+import { isRateLimited } from "@/lib/rateLimit";
 import { analyzeVisionInput } from "@/lib/visionEngine";
+import { analyzeWithLlm, parseImageDataUrl } from "@/lib/visionLlm";
 import { DEFAULT_STORE_ID } from "@/lib/stores";
 import { VisionSampleId } from "@/lib/types";
+
+// Foto ja chega reduzida pelo cliente (~200 KB); o teto protege o limite de 4,5 MB da Vercel.
+const MAX_IMAGE_CHARS = 3_000_000;
 
 type VisionRequestBody = {
   sampleId?: VisionSampleId;
@@ -12,6 +18,10 @@ type VisionRequestBody = {
 };
 
 export async function POST(req: Request) {
+  if (isRateLimited(req)) {
+    return NextResponse.json({ error: "Muitas fotos seguidas. Aguarde um minuto." }, { status: 429 });
+  }
+
   let body: VisionRequestBody;
   try {
     body = await req.json();
@@ -19,19 +29,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
+  const storeId = body.storeId || DEFAULT_STORE_ID;
+  const caption = (body.caption ?? "").slice(0, 200);
+  const image = body.imagePreview;
+
+  if (image && (image.length > MAX_IMAGE_CHARS || !parseImageDataUrl(image))) {
+    return NextResponse.json({ error: "Imagem inválida ou grande demais" }, { status: 400 });
+  }
+
+  if (image && !body.sampleId && isLlmEnabled()) {
+    try {
+      const analysis = await analyzeWithLlm({ imageDataUrl: image, caption, storeId });
+      return NextResponse.json({ analysis, engine: VISION_MODEL });
+    } catch (err) {
+      console.warn("[vision] fallback para motor local:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // A imagem nao volta na resposta: o cliente ja tem a previa.
   const analysis = analyzeVisionInput({
     sampleId: body.sampleId,
     fileName: body.fileName,
-    caption: body.caption,
-    imagePreview: body.imagePreview,
-    storeId: body.storeId || DEFAULT_STORE_ID,
+    caption,
+    storeId,
   });
-
-  // Latência simulada da pipeline visual
-  await new Promise((r) => setTimeout(r, 550));
-
-  return NextResponse.json({
-    analysis,
-    engine: "lm-vision-local-v2",
-  });
+  return NextResponse.json({ analysis, engine: "local" });
 }

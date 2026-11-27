@@ -1,4 +1,4 @@
-const CACHE_NAME = "lm-copiloto-v4";
+const CACHE_NAME = "lm-copiloto-v5";
 const PRECACHE_URLS = ["/", "/chat", "/catalogo", "/lista", "/mapa", "/painel", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -22,10 +22,15 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((res) => {
-        const clone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
+        }
         return res;
       })
-      .catch(() => caches.match(event.request))
+      // Offline: /lista?id=x cai na pagina /lista em cache; sem cache, erro de rede explicito.
+      .catch(() =>
+        caches.match(event.request, { ignoreSearch: true }).then((cached) => cached ?? Response.error())
+      )
   );
 });

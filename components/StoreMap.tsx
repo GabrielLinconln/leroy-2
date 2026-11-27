@@ -86,14 +86,12 @@ export function StoreMap({
   completedAisles,
   onSelectAisle,
   heatmapCounts,
-  storeLabel = "Leroy Merlin Vitória · Av. Fernando Ferrari, 2600",
 }: {
   route?: ComputedStoreRoute;
   activeStopIndex?: number | null;
   completedAisles?: Set<string>;
   onSelectAisle?: (aisleId: string) => void;
   heatmapCounts?: Record<string, number>;
-  storeLabel?: string;
 }) {
   const [zoom, setZoom] = useState<1 | 1.35>(1);
 
@@ -120,13 +118,13 @@ export function StoreMap({
           <span className="truncate">
             {isHeatmap
               ? "Planta 2D · Mapa de Calor de Demanda"
-              : `Planta 2D · ${storeLabel}`}
+              : "Planta ilustrativa da loja"}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="hidden font-mono text-[9.5px] text-white/55 sm:inline">
-            15.700m² · 15 SETORES
+            PLANTA ILUSTRATIVA
           </span>
           <div className="inline-flex overflow-hidden rounded border border-white/15 font-mono text-[10px]">
             <button
@@ -399,7 +397,7 @@ export function StoreMap({
                   >
                     {isSpecial
                       ? a.shortLabel.toUpperCase()
-                      : `${a.id} · ${a.corridorNumber ?? ""}`}
+                      : a.corridorNumber ?? a.id}
                   </text>
 
                   {!isSpecial && (
@@ -656,7 +654,7 @@ export function StoreMap({
         <span className="text-[10px] text-signage-subtle">
           {isHeatmap
             ? "Calor em tempo real · Vitória ES"
-            : "Clique em qualquer corredor destacado"}
+            : "Toque em um corredor destacado"}
         </span>
       </div>
     </div>

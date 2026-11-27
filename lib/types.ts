@@ -48,6 +48,8 @@ export type Product = {
   tags: string[];
   stockByStore: Record<string, number>;
   substituteId?: string;
+  /** Pagina do produto no site da Leroy Merlin. */
+  url?: string;
 };
 
 export type ProjectItem = {
@@ -231,24 +233,27 @@ export type RoutePoint = {
   y: number;
 };
 
-export type AnalyticsEventType =
-  | "session_start"
-  | "chat_message"
-  | "voice_command"
-  | "semantic_search"
-  | "vision_scan"
-  | "list_generated"
-  | "item_checked"
-  | "item_substituted"
-  | "compatibility_fixed"
-  | "tier_switched"
-  | "install_service_added"
-  | "esl_blink_triggered"
-  | "navigation_started"
-  | "navigation_completed"
-  | "handoff_requested"
-  | "tutorial_viewed"
-  | "store_changed";
+export const ANALYTICS_EVENT_TYPES = [
+  "session_start",
+  "chat_message",
+  "voice_command",
+  "semantic_search",
+  "vision_scan",
+  "list_generated",
+  "item_checked",
+  "item_substituted",
+  "compatibility_fixed",
+  "tier_switched",
+  "install_service_added",
+  "esl_blink_triggered",
+  "navigation_started",
+  "navigation_completed",
+  "handoff_requested",
+  "tutorial_viewed",
+  "store_changed",
+] as const;
+
+export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];
 
 export type AnalyticsEvent = {
   id: string;
@@ -260,4 +265,10 @@ export type AnalyticsEvent = {
   painTopic?: string;
   productName?: string;
   durationSec?: number;
+  /** Agrupa eventos da mesma visita (sessionStorage do aparelho). */
+  sessionId?: string;
+  /** Quem respondeu no chat: modelo Gemini ou "local". */
+  engine?: string;
+  /** O que o cliente pediu e a loja nao tinha. */
+  unmet?: string;
 };

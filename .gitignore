@@ -11,3 +11,4 @@ scripts/collected_images
 scripts/collected_catalog.json
 scripts/collected_catalog_export.ts
 
+.env

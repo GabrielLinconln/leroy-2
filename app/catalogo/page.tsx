@@ -105,6 +105,7 @@ function CatalogoInner() {
       label: `Busca semântica: "${q}" → ${top?.product.name ?? "catálogo"}`,
       aisle: top?.product.aisle,
       painTopic: top?.product.category || "Busca Semântica",
+      unmet: top ? undefined : q.slice(0, 80),
     });
   }
 
@@ -151,9 +152,9 @@ function CatalogoInner() {
       tutorial: [
         {
           step: 1,
-          title: "Localize cada item pela etiqueta ESL piscante",
+          title: "Ache cada item pela etiqueta que acende",
           detail:
-            "No corredor indicado, toque em 'Piscar ESL' para acender o LED verde na prateleira exata.",
+            "No corredor indicado, toque em 'Localizar' para acender o LED verde na prateleira exata.",
           durationMin: 4,
         },
         {
@@ -194,6 +195,9 @@ function CatalogoInner() {
               {matches.length} {matches.length === 1 ? "produto" : "produtos"}
             </span>
           </div>
+          <p className="mt-1 text-[12px] text-signage-subtle">
+            Produtos, códigos e fotos do site da Leroy Merlin. Preços de referência; estoque e corredor ilustrativos.
+          </p>
 
           {/* Barra de busca + voz */}
           <div className="mt-3.5 flex gap-2">

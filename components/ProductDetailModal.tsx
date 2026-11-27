@@ -4,6 +4,7 @@ import { Product } from "@/lib/types";
 import { ProductCardMedia } from "./ProductThumb";
 import { MicroBarcode } from "./EslShelfModal";
 import { CheckIcon, CloseIcon, MapPinIcon, PlusIcon, RadioIcon } from "./Icons";
+import { useDialog } from "./useDialog";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -30,6 +31,7 @@ export function ProductDetailModal({
   onToggleSelect: (product: Product) => void;
   onOpenEsl: (product: Product, stockQty: number) => void;
 }) {
+  const dialogRef = useDialog<HTMLDivElement>(!!product, onClose);
   if (!product) return null;
 
   const inStock = stockQty > 0;
@@ -40,7 +42,10 @@ export function ProductDetailModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-[520px] animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-2xl"
+        ref={dialogRef}
+        role="dialog" aria-modal="true" tabIndex={-1}
+        aria-label={product.name}
+        className="max-h-[92vh] w-full max-w-[520px] focus:outline-none animate-slide-up overflow-y-auto rounded-t-2xl border border-rule-strong bg-white shadow-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Foto full-bleed 16:10 para caber integralmente em telas 1280x800 sem rolagem */}
@@ -52,7 +57,7 @@ export function ProductDetailModal({
             className="!aspect-[16/10] max-h-[245px]"
           />
           <span className="aisle-plate absolute left-3 top-3 shadow-sm">
-            {product.corridorCode} · {product.aisle}
+            Corredor {product.corridorCode}
           </span>
           <button
             type="button"
@@ -98,6 +103,7 @@ export function ProductDetailModal({
               <span className="ml-1.5 text-[12px] text-signage-subtle">
                 / {product.unit}
               </span>
+              <div className="text-[11px] text-signage-subtle">Preço de referência</div>
             </div>
 
             {inStock ? (
@@ -117,7 +123,7 @@ export function ProductDetailModal({
                 Onde encontrar ({storeName})
               </div>
               <div className="mt-1 text-[13px] font-bold text-signage">
-                Corredor {product.corridorCode} · Setor {product.aisle}
+                Corredor {product.corridorCode}
               </div>
               <div className="text-[12px] text-signage-muted">
                 {product.shelfLocation}
@@ -126,15 +132,22 @@ export function ProductDetailModal({
 
             <div className="rounded-lg bg-floor p-3">
               <div className="font-mono text-[10px] font-bold uppercase tracking-wider text-signage-subtle">
-                Código de referência
+                Código Leroy Merlin
               </div>
               <div className="mt-1.5 flex items-center gap-2 text-signage">
                 <MicroBarcode className="h-3.5 w-14" />
                 <span className="font-mono text-[12px] font-bold">{product.sku}</span>
               </div>
-              <div className="mt-0.5 text-[11px] text-signage-subtle">
-                Etiqueta E-Ink vinculada
-              </div>
+              {product.url && (
+                <a
+                  href={product.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex min-h-[32px] items-center text-[12px] font-bold text-leroy-deep underline underline-offset-2"
+                >
+                  Ver no site da Leroy
+                </a>
+              )}
             </div>
           </div>
 
@@ -150,7 +163,7 @@ export function ProductDetailModal({
                 className="btn-secondary flex-1 !py-2.5"
               >
                 <RadioIcon size={15} className="text-leroy-dark" />
-                Piscar etiqueta ESL
+                Acender etiqueta na prateleira
               </button>
             )}
 

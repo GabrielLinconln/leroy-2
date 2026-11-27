@@ -28,7 +28,8 @@ import {
   saveHandoffTicket,
   trackEvent,
 } from "@/lib/telemetry";
-import { ChatContext, ChatMessage, DynamicProjectList } from "@/lib/types";
+import { ChatContext, ChatMessage, DynamicProjectList, VisionAnalysisResult } from "@/lib/types";
+import { corridorOf } from "@/lib/storeMap";
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -43,7 +44,7 @@ function projectTotal(p: DynamicProjectList): number {
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "Modo Loja conectado. Descreva o que você precisa resolver — por **voz**, **texto** ou **foto da peça**.\n\nEu diagnostico o problema, valido compatibilidade contra 2ª viagem, confirmo estoque nesta unidade e marco a prateleira com etiqueta piscante.",
+  text: "Modo Loja conectado. Descreva o que você precisa resolver — por **voz**, **texto** ou **foto da peça**.\n\nEu diagnostico o problema, confiro se as peças combinam entre si, confirmo o estoque desta loja e acendo a etiqueta na prateleira.",
   suggestions: [
     "Minha torneira está pingando",
     "Quero pintar um quarto azul de 4x5m com teto",
@@ -64,7 +65,7 @@ export default function ChatPage() {
 
 function ChatSkeleton() {
   return (
-    <div className="flex h-screen flex-col bg-floor">
+    <div className="flex h-dvh flex-col bg-floor">
       <StoreBar />
       <div className="flex flex-1 items-center justify-center">
         <TypingDots />
@@ -130,6 +131,13 @@ function ChatInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
+  // Chips que sao acoes de tela, nao mensagens (vindos do motor local ou do modelo).
+  function handleSuggestion(text: string) {
+    if (/\bfotos?\b/i.test(text)) setVisionOpen(true);
+    else if (/cat[aá]logo/i.test(text)) router.push("/catalogo");
+    else sendMessage(text);
+  }
+
   async function sendMessage(text: string, viaVoice = false) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -154,9 +162,11 @@ function ChatInner() {
           message: trimmed,
           context: { ...context, storeId: currentStore },
           storeId: currentStore,
+          history: messages.slice(-8).map(({ role, text }) => ({ role, text })),
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const reply = data.response as Omit<ChatMessage, "id" | "role" | "timestamp">;
 
       if (reply.actionProject) {
@@ -168,10 +178,8 @@ function ChatInner() {
           label: `Lista gerada: ${reply.actionProject.title}`,
           aisle: firstAisle,
           painTopic: data.painTopic || reply.actionProject.sourceIntent,
-          durationSec: Math.max(
-            12,
-            Math.round((Date.now() - sessionStartRef.current) / 1000)
-          ),
+          durationSec: Math.round((Date.now() - sessionStartRef.current) / 1000),
+          engine: data.engine,
         });
       } else if (reply.handoffTicket) {
         saveHandoffTicket(reply.handoffTicket);
@@ -181,6 +189,7 @@ function ChatInner() {
           label: `Handoff ${reply.handoffTicket.id}: ${reply.handoffTicket.customerPain}`,
           aisle: reply.handoffTicket.aisle,
           painTopic: data.painTopic || reply.handoffTicket.category,
+          engine: data.engine,
         });
       } else {
         trackEvent({
@@ -188,6 +197,8 @@ function ChatInner() {
           storeId: currentStore,
           label: `Consulta: "${trimmed.slice(0, 60)}"`,
           painTopic: data.painTopic,
+          engine: data.engine,
+          unmet: data.unmet,
         });
       }
 
@@ -224,7 +235,7 @@ function ChatInner() {
       role: "user",
       text:
         selection.kind === "sample"
-          ? `Scanner visual enviado: ${selection.label}`
+          ? `Foto enviada: ${selection.label}`
           : selection.caption
           ? `Foto enviada (${selection.fileName}): ${selection.caption}`
           : `Foto enviada para diagnóstico (${selection.fileName})`,
@@ -252,7 +263,9 @@ function ChatInner() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      const analysis = data.analysis;
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const analysis = data.analysis as VisionAnalysisResult;
+      const identified = analysis.confidence > 0;
 
       if (analysis.project) {
         saveDynamicProject(analysis.project);
@@ -261,7 +274,7 @@ function ChatInner() {
       trackEvent({
         type: "vision_scan",
         storeId: currentStore,
-        label: `Foto analisada: ${analysis.detectedItem} (${analysis.confidence}%)`,
+        label: `Foto analisada: ${analysis.detectedItem} (confiança ${confidenceLabel(analysis.confidence)})`,
         aisle: analysis.project?.items?.[0]?.aisle,
         painTopic: analysis.category,
       });
@@ -269,12 +282,14 @@ function ChatInner() {
       const aiMsg: ChatMessage = {
         id: `av-${Date.now()}`,
         role: "assistant",
-        text: `Peça identificada com **${analysis.confidence}% de precisão**.\n\n${analysis.diagnosis}`,
-        visionResult: analysis,
+        text: identified
+          ? `Identifiquei **${analysis.detectedItem}** (confiança ${confidenceLabel(analysis.confidence)}).\n\n${analysis.diagnosis}`
+          : analysis.diagnosis,
+        visionResult: identified ? analysis : undefined,
         actionProject: analysis.project,
-        suggestions: analysis.requiresSpecialist
-          ? ["Chamar vendedor especialista", "Resolver outro projeto"]
-          : ["Quero trocar a peça completa", "Chamar vendedor especialista"],
+        suggestions: analysis.requiresSpecialist || !identified
+          ? ["Chamar especialista"]
+          : [analysis.suggestedPrompt, "Chamar especialista"],
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -301,7 +316,7 @@ function ChatInner() {
   const activeStore = getStoreById(storeId);
 
   return (
-    <div className="flex h-screen flex-col bg-floor">
+    <div className="flex h-dvh flex-col bg-floor">
       <StoreBar />
 
       {/* Sub-barra técnica de sessão em loja */}
@@ -317,19 +332,19 @@ function ChatInner() {
             <button
               type="button"
               onClick={() => setVisionOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-floor px-2.5 py-1 font-mono text-[11px] font-semibold text-signage transition hover:border-leroy hover:bg-leroy-soft"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-rule bg-floor px-3 py-2 text-[13px] font-semibold text-signage transition hover:border-leroy hover:bg-leroy-soft"
             >
-              <CameraIcon size={12} />
+              <CameraIcon size={14} />
               Foto
             </button>
             <button
               type="button"
               onClick={() => sendMessage("Chamar vendedor especialista")}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-md bg-signage px-2.5 py-1 font-mono text-[11px] font-semibold text-leroy transition hover:bg-signage-soft"
+              className="inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-md bg-signage px-3 py-2 text-[13px] font-semibold text-leroy transition hover:bg-signage-soft"
             >
-              <UserCheckIcon size={12} />
-              Chamar Vendedor
+              <UserCheckIcon size={14} />
+              Chamar vendedor
             </button>
           </div>
         </div>
@@ -350,7 +365,7 @@ function ChatInner() {
                         Leitura Visual · {msg.visionResult.category}
                       </span>
                       <span className="rounded bg-signage px-2 py-0.5 font-mono text-[10px] font-bold text-leroy">
-                        {msg.visionResult.confidence}% PREC.
+                        CONFIANÇA {confidenceLabel(msg.visionResult.confidence).toUpperCase()}
                       </span>
                     </div>
                     <div className="mt-1.5 font-display text-[14px] font-bold text-signage">
@@ -380,24 +395,37 @@ function ChatInner() {
                         {msg.actionProject.title}
                       </div>
 
-                      {/* Galeria rápida com fotos reais dos itens do kit */}
-                      <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1">
-                        {msg.actionProject.items.slice(0, 6).map((it) => (
-                          <div
-                            key={it.productId}
-                            title={`${it.brand} — ${it.name}`}
-                            className="flex-shrink-0"
-                          >
+                      {/* Cada item com foto, corredor e preco para decidir sem abrir a lista */}
+                      <ul className="mt-2.5 divide-y divide-rule rounded-md border border-rule bg-white">
+                        {msg.actionProject.items.slice(0, 4).map((it) => (
+                          <li key={it.productId} className="flex items-center gap-2.5 px-2.5 py-2">
                             <ProductThumb
                               src={it.imageUrl}
-                              alt={it.name}
+                              alt=""
                               category={it.category}
-                              size={46}
+                              size={40}
                               className="p-0.5"
                             />
-                          </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12.5px] font-semibold text-signage">{it.name}</div>
+                              <div className="text-[11px] text-signage-muted">
+                                <span className="font-mono font-bold text-signage">{it.corridorCode}</span>
+                                {" · "}
+                                {it.inStock ? `${it.stockQty} un.` : <span className="font-semibold text-danger">Sem estoque</span>}
+                                {it.optional && " · Opcional"}
+                              </div>
+                            </div>
+                            <span className="flex-shrink-0 font-mono text-[12.5px] font-bold tabular-nums text-signage">
+                              {formatBRL(it.price * it.quantity)}
+                            </span>
+                          </li>
                         ))}
-                      </div>
+                        {msg.actionProject.items.length > 4 && (
+                          <li className="px-2.5 py-1.5 text-[11.5px] font-medium text-signage-muted">
+                            + {msg.actionProject.items.length - 4} itens na lista completa
+                          </li>
+                        )}
+                      </ul>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
                         <span className="badge-stock-ok">
@@ -407,7 +435,7 @@ function ChatInner() {
                         </span>
 
                         {Array.from(
-                          new Set(msg.actionProject.items.map((i) => i.aisle))
+                          new Set(msg.actionProject.items.map((i) => i.corridorCode))
                         ).map((aisle) => (
                           <span key={aisle} className="aisle-plate">
                             {aisle}
@@ -430,7 +458,7 @@ function ChatInner() {
                           className="btn-accent !px-3 !py-2.5 !text-[12.5px]"
                         >
                           <MapIcon size={13} />
-                          Rota & ESL
+                          Rota na loja
                         </button>
                       </div>
                     </div>
@@ -462,7 +490,7 @@ function ChatInner() {
                         </div>
                         <div className="text-right">
                           <span className="aisle-plate">
-                            CORR. {msg.handoffTicket.aisle}
+                            CORR. {corridorOf(msg.handoffTicket.aisle)}
                           </span>
                           <div className="mt-0.5 font-mono text-[10.5px] font-semibold text-signage-muted">
                             ETA ~{msg.handoffTicket.etaMinutes} min
@@ -491,17 +519,22 @@ function ChatInner() {
 
               {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pl-[38px]">
-                  {msg.suggestions.map((sug) => (
-                    <button
-                      key={sug}
-                      type="button"
-                      onClick={() => sendMessage(sug)}
-                      disabled={loading}
-                      className="chip"
-                    >
-                      {sug}
-                    </button>
-                  ))}
+                  {msg.suggestions.map((sug) => {
+                    // Pedido de pessoa vira acao principal: chega em risco ou quando a resposta nao bastou.
+                    const human = /chamar|especialista|t[ée]cnico|vendedor/i.test(sug);
+                    return (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => handleSuggestion(sug)}
+                        disabled={loading}
+                        className={human ? "btn-primary min-h-[44px] !px-3.5 !py-2 !text-[13px]" : "chip"}
+                      >
+                        {human && <UserCheckIcon size={14} />}
+                        {sug}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -537,9 +570,9 @@ function ChatInner() {
             <button
               type="button"
               aria-label="Identificar peça por foto"
-              title="Scanner Visual (Câmera / Fotos)"
+              title="Enviar foto da peça"
               onClick={() => setVisionOpen(true)}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-rule-strong bg-white text-signage transition hover:border-leroy hover:bg-leroy-soft hover:text-leroy-deep"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-rule-strong bg-white text-signage transition hover:border-leroy hover:bg-leroy-soft hover:text-leroy-deep"
             >
               <CameraIcon size={18} />
             </button>
@@ -549,16 +582,18 @@ function ChatInner() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Fale ou digite o problema (ex: pintar quarto 4x5m, torneira pingando)…"
+              maxLength={500}
+              aria-label="Mensagem para o copiloto"
+              placeholder="Descreva o problema…"
               disabled={loading}
-              className="h-10 flex-1 rounded-lg border border-rule-strong bg-floor px-3.5 text-[13.5px] text-signage outline-none transition placeholder:text-signage-subtle focus:border-signage focus:bg-white"
+              className="h-11 min-w-0 flex-1 rounded-lg border border-rule-strong bg-floor px-3.5 text-[13.5px] text-signage outline-none transition placeholder:text-signage-subtle focus:border-signage focus:bg-white"
             />
 
             <button
               type="submit"
               disabled={loading || !input.trim()}
               aria-label="Enviar mensagem"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-signage text-leroy transition hover:bg-signage-soft disabled:opacity-35"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-signage text-leroy transition hover:bg-signage-soft disabled:opacity-50"
             >
               <SendIcon size={16} />
             </button>
@@ -573,4 +608,11 @@ function ChatInner() {
       />
     </div>
   );
+}
+
+// O modelo nao devolve probabilidade calibrada: mostrar faixa, nunca um percentual.
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 80) return "alta";
+  if (confidence >= 60) return "média";
+  return "baixa";
 }

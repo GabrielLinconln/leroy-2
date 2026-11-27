@@ -19,12 +19,14 @@ import {
   setSelectedStoreId,
   trackEvent,
 } from "@/lib/telemetry";
+import { useDialog } from "./useDialog";
 
 export function StoreBar() {
   const pathname = usePathname();
   const [storeId, setStoreId] = useState("es-vitoria");
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const qrDialogRef = useDialog<HTMLDivElement>(qrOpen, () => setQrOpen(false));
   const [currentOrigin, setCurrentOrigin] = useState("https://lm-copiloto.vercel.app");
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -103,16 +105,19 @@ export function StoreBar() {
             })}
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {/* Seletor customizado de unidade (zero seta dupla de navegador!) */}
-            <div ref={menuRef} className="relative">
+            <div ref={menuRef} className="relative min-w-0">
               <button
                 type="button"
                 onClick={() => setStoreMenuOpen((v) => !v)}
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[11.5px] font-medium text-white transition hover:border-leroy/70"
+                aria-haspopup="listbox"
+                aria-expanded={storeMenuOpen}
+                aria-label={`Loja: ${activeStore.shortName}. Trocar de loja`}
+                className="inline-flex h-10 max-w-full items-center gap-2 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[12px] font-medium text-white transition hover:border-leroy/70"
               >
                 <StoreIcon size={13} className="text-leroy" />
-                <span className="max-w-[125px] truncate sm:max-w-[165px]">
+                <span className="min-w-0 max-w-[125px] truncate sm:max-w-[165px]">
                   {activeStore.shortName}
                 </span>
                 <svg
@@ -168,7 +173,7 @@ export function StoreBar() {
               onClick={() => setQrOpen(true)}
               aria-label="Abrir etiqueta QR do carrinho"
               title="Etiqueta QR Code do Carrinho"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[11.5px] font-semibold text-white/90 transition hover:border-leroy hover:text-leroy"
+              className="inline-flex h-10 min-w-[40px] items-center justify-center gap-1.5 rounded-md border border-white/15 bg-signage-soft px-2.5 text-[12px] font-semibold text-white/90 transition hover:border-leroy hover:text-leroy"
             >
               <QrCodeIcon size={14} />
               <span className="hidden sm:inline">QR</span>
@@ -207,7 +212,10 @@ export function StoreBar() {
           onClick={() => setQrOpen(false)}
         >
           <div
-            className="w-full max-w-[400px] animate-slide-up overflow-hidden rounded-xl border border-rule-strong bg-white shadow-2xl"
+            ref={qrDialogRef}
+            role="dialog" aria-modal="true" tabIndex={-1}
+            aria-label="Etiqueta QR do carrinho"
+            className="w-full max-w-[400px] focus:outline-none animate-slide-up overflow-hidden rounded-xl border border-rule-strong bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Topo estilo placa de carrinho */}
@@ -215,7 +223,7 @@ export function StoreBar() {
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 bg-leroy" />
                 <span className="font-mono text-[11px] font-bold uppercase tracking-[0.15em]">
-                  Etiqueta de Carrinho · Zero-Fricção
+                  Etiqueta do carrinho
                 </span>
               </div>
               <button

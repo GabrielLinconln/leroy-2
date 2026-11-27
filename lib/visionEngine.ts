@@ -42,7 +42,29 @@ export const VISION_SAMPLES: VisionSampleMeta[] = [
   },
 ];
 
-export function analyzeVisionInput(params: {
+// Palpite feito so pela legenda, sem olhar a imagem: nunca apresentar como certeza alta.
+const TEXT_ONLY_CONFIDENCE = 60;
+
+function notIdentified(): VisionAnalysisResult {
+  return {
+    id: `vis-${crypto.randomUUID().slice(0, 8)}`,
+    detectedItem: "Não consegui identificar pela foto",
+    confidence: 0,
+    category: "Materiais Básicos",
+    technicalTranslation: "Sem item do catálogo para esta foto",
+    diagnosis: "Ainda não reconheço a peça só pela imagem. Descreva o problema por texto (ex.: \"torneira pingando\") ou escreva uma legenda na foto.",
+    recommendedAction: "Descreva o problema por texto ou voz.",
+    suggestedPrompt: "Chamar especialista",
+    matchedProductIds: [],
+  };
+}
+
+export function analyzeVisionInput(params: Parameters<typeof analyzeResolved>[0]): VisionAnalysisResult {
+  const result = analyzeResolved(params);
+  return params.sampleId ? result : { ...result, confidence: Math.min(result.confidence, TEXT_ONLY_CONFIDENCE) };
+}
+
+function analyzeResolved(params: {
   sampleId?: VisionSampleId;
   fileName?: string;
   caption?: string;
@@ -69,19 +91,19 @@ export function analyzeVisionInput(params: {
         return {
           id: `vis-${Date.now().toString(36)}`,
           detectedItem: `${top.name}`,
-          confidence: Math.min(96, Math.max(82, matches[0].score)),
+          confidence: TEXT_ONLY_CONFIDENCE,
           category: top.category,
-          technicalTranslation: `Identificado em ${top.category} (${top.aisle} / ${top.corridorCode} · ${top.shelfLocation}).`,
+          technicalTranslation: `Identificado em ${top.category} (Corredor ${top.corridorCode} · ${top.shelfLocation}).`,
           diagnosis: `Com base na foto enviada e na descrição "${params.caption || params.fileName}", o item compatível na unidade é ${top.name}.`,
           recommendedAction: "Confira os equivalentes ou abra a lista com rota guiada.",
           suggestedPrompt: top.name,
           matchedProductIds: matches.map((m) => m.product.id),
-          imagePreview: params.imagePreview,
         };
       }
-      resolvedSample = "torneira-vazando";
+      return notIdentified();
     } else {
-      resolvedSample = "torneira-vazando";
+      // Sem analise de imagem e sem pista no texto: melhor admitir do que chutar torneira.
+      return notIdentified();
     }
   }
 
@@ -97,10 +119,10 @@ export function analyzeVisionInput(params: {
         detectedItem: 'Torneira de Mesa 1/2" com gotejamento na bica',
         confidence: 96,
         category: "Hidráulica",
-        technicalTranslation: 'Corredor C05 (H3): Reparo Universal MVS 1/2" Blukit + Veda-Rosca Tigre',
+        technicalTranslation: "Corredor C05 (H3): Reparo para Torneiras Deca + Fita Veda Rosca Equation",
         diagnosis:
           "Vazamento pela bica fechada indica desgaste na vedação interna. Não precisa trocar a torneira inteira se o corpo estiver firme.",
-        recommendedAction: "Trocar o reparo interno Blukit (15 min de instalação).",
+        recommendedAction: "Trocar o reparo interno da torneira (15 min de instalação).",
         suggestedPrompt: "Quero o reparo da torneira identificada na foto",
         project,
         matchedProductIds: ["hid-reparo-univ", "hid-veda-rosca", "fer-chave-fenda"],
@@ -116,9 +138,9 @@ export function analyzeVisionInput(params: {
         detectedItem: 'Sifão Sanfonado 1.1/2" vazando na curva inferior',
         confidence: 94,
         category: "Hidráulica",
-        technicalTranslation: "Corredor C04 (H2): Sifão Sanfonado Universal Extensível Tigre",
+        technicalTranslation: "Corredor C04 (H2): Sifão Universal Extensível Amanco",
         diagnosis:
-          "Fissura nas dobras do tubo sanfonado sob a pia. A troca por um sifão universal Tigre elimina o gotejamento e o mau cheiro.",
+          "Fissura nas dobras do tubo sanfonado sob a pia. A troca por um sifão universal extensível elimina o gotejamento e o mau cheiro.",
         recommendedAction: "Substituir o sifão sem ferramentas pesadas (~12 min).",
         suggestedPrompt: "Montar lista para trocar o sifão da foto",
         project,
@@ -155,9 +177,9 @@ export function analyzeVisionInput(params: {
         detectedItem: "Resistência de Chuveiro Elétrico Rompida (220V)",
         confidence: 95,
         category: "Elétrica",
-        technicalTranslation: "Corredor C19 (E1): Resistência Loren Ultra Lorenzetti + Conector Wago 221",
+        technicalTranslation: "Corredor C19 (E1): Resistência Lorenzetti + Conector de Emenda Wago",
         diagnosis:
-          "Filamento rompido interrompe o aquecimento. Na troca, recomenda-se substituir emendas com fita por Conector Wago 32A.",
+          "Filamento rompido interrompe o aquecimento. Na troca, recomenda-se substituir emendas com fita por conector de emenda Wago.",
         recommendedAction: "Desligar disjuntor, trocar resistência e encher de água fria antes de religar.",
         suggestedPrompt: "Ver lista segura para trocar resistência do chuveiro",
         project,

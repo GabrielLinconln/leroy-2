@@ -1,37 +1,28 @@
 import { NextResponse } from "next/server";
-import { SEED_TICKETS } from "@/lib/telemetry";
-import { HandoffTicket, HandoffTicketStatus } from "@/lib/types";
+import { listTickets, updateTicketStatus } from "@/lib/serverStore";
+import { HandoffTicketStatus } from "@/lib/types";
 
-let serverTickets: HandoffTicket[] = [...SEED_TICKETS];
+export const dynamic = "force-dynamic";
 
+const STATUSES: HandoffTicketStatus[] = ["aguardando", "a_caminho", "em_atendimento", "resolvido"];
+
+// Chamados sao criados pela rota /api/chat, no servidor; aqui so leitura e mudanca de status.
 export async function GET() {
-  return NextResponse.json({ tickets: serverTickets });
-}
-
-export async function POST(req: Request) {
-  try {
-    const ticket = (await req.json()) as HandoffTicket;
-    if (!ticket?.id || !ticket?.customerPain) {
-      return NextResponse.json({ error: "Ticket inválido" }, { status: 400 });
-    }
-    serverTickets = [ticket, ...serverTickets.filter((t) => t.id !== ticket.id)].slice(0, 50);
-    return NextResponse.json({ ok: true, ticket }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
-  }
+  const { rows, demo } = await listTickets();
+  return NextResponse.json({ tickets: rows, demo });
 }
 
 export async function PATCH(req: Request) {
+  let body: { id?: unknown; status?: unknown };
   try {
-    const body = (await req.json()) as { id?: string; status?: HandoffTicketStatus };
-    if (!body.id || !body.status) {
-      return NextResponse.json({ error: "id e status são obrigatórios" }, { status: 400 });
-    }
-    serverTickets = serverTickets.map((t) =>
-      t.id === body.id ? { ...t, status: body.status! } : t
-    );
-    return NextResponse.json({ ok: true, tickets: serverTickets });
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+  const status = STATUSES.find((s) => s === body?.status);
+  if (typeof body?.id !== "string" || !status) {
+    return NextResponse.json({ error: "id e status são obrigatórios" }, { status: 400 });
+  }
+  const found = await updateTicketStatus(body.id.slice(0, 40), status);
+  return NextResponse.json({ ok: found }, { status: found ? 200 : 404 });
 }

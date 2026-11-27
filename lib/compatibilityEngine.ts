@@ -1,3 +1,4 @@
+import { getProductById } from "./catalog";
 import {
   CompatibilityAlert,
   CompatibilityAudit,
@@ -33,7 +34,7 @@ export function auditProjectCompatibility(
         severity: "critical",
         title: `Item sem estoque nesta loja: ${item.name}`,
         explanation: item.substituteName
-          ? `Evite andar até o corredor ${item.aisle} à toa. Há substituto equivalente em estoque (${item.substituteName}, ${item.substituteStockQty} un.).`
+          ? `Evite andar até o corredor ${item.corridorCode} à toa. Há substituto equivalente em estoque (${item.substituteName}, ${item.substituteStockQty} un.).`
           : `Este item está esgotado nesta unidade. Troque de loja no topo ou consulte um especialista.`,
         fixLabel: item.substituteName ? `Substituir por ${item.substituteName.split(" ").slice(0, 3).join(" ")}` : undefined,
         fixType: item.substituteId ? "replace_product" : undefined,
@@ -77,15 +78,15 @@ export function auditProjectCompatibility(
       alerts.push({
         id: "ele-no-wago",
         severity: "critical",
-        title: "Segurança elétrica: inclua Conector Wago 32A",
+        title: "Segurança elétrica: inclua conector de emenda Wago",
         explanation:
-          "Emendas de chuveiro 220V apenas com fita isolante aquecem e derretem. O conector Wago 32A garante contato firme e evita curto-circuito.",
-        fixLabel: "Adicionar Conector Wago 32A (R$ 18,90 · E1)",
+          "Emendas de chuveiro 220V apenas com fita isolante aquecem e derretem. O conector de emenda Wago garante contato firme e evita curto-circuito.",
+        fixLabel: "Adicionar conector Wago (corredor C19)",
         fixType: "add_product",
         targetProductId: "ele-conector-wago",
       });
     } else {
-      passedChecks.push("Conexão elétrica de alta corrente segura (Wago 32A)");
+      passedChecks.push("Conexão elétrica de alta corrente segura (conector Wago)");
     }
 
     if (!allIds.has("ele-chave-teste")) {
@@ -112,7 +113,7 @@ export function auditProjectCompatibility(
       severity: "critical",
       title: "Incompatibilidade: Bucha S8 comum solta em Drywall!",
       explanation:
-        "Paredes ocas de gesso acartonado precisam de bucha com expansão borboleta. A bucha S8 comum espana e derruba a prateleira.",
+        "Paredes ocas de gesso acartonado precisam de bucha própria para drywall. A bucha S8 comum espana e derruba a prateleira.",
       fixLabel: "Trocar para Bucha Drywall (R$ 19,90 · F3)",
       fixType: "replace_product",
       targetProductId: "fix-bucha-s8",
@@ -129,8 +130,8 @@ export function auditProjectCompatibility(
           ? "Instalação exige Broca adequada para abrir o furo da bucha"
           : "Bucha S8 exige Broca Vídea 8mm para alvenaria",
         explanation: isDrywallProject
-          ? "Sem a broca no diâmetro exato da bucha borboleta, o gesso esfarela e o suporte perde firmeza."
-          : "Usar broca de madeira ou metal em tijolo alarga o furo e faz a bucha girar em falso. Adicione o kit vídea 6/8/10mm.",
+          ? "Sem a broca no diâmetro exato da bucha de drywall, o gesso esfarela e o suporte perde firmeza."
+          : "Usar broca de madeira ou metal em tijolo alarga o furo e faz a bucha girar em falso. Adicione o jogo de brocas para concreto.",
         fixLabel: "Adicionar Kit Brocas Vídea (R$ 24,90 · F2)",
         fixType: "add_product",
         targetProductId: "fer-kit-brocas",
@@ -138,7 +139,7 @@ export function auditProjectCompatibility(
     } else {
       passedChecks.push(
         isDrywallProject
-          ? "Compatibilidade drywall × bucha borboleta × broca validada"
+          ? "Compatibilidade drywall × bucha de drywall × broca validada"
           : "Compatibilidade bucha × broca validada (S8 ↔ Vídea 8mm)"
       );
     }
@@ -225,12 +226,20 @@ export function auditProjectCompatibility(
       ? `${criticalCount} alerta${criticalCount > 1 ? "s" : ""} crítico${criticalCount > 1 ? "s" : ""}`
       : warningCount > 0
       ? `${warningCount} ponto${warningCount > 1 ? "s" : ""} de atenção`
-      : "Lista blindada contra 2ª viagem";
+      : "Tudo certo: você não vai precisar voltar à loja";
 
   return {
     score,
     statusLabel,
-    alerts,
+    alerts: alerts.map(withCatalogPrice),
     passedChecks,
   };
+}
+
+// Preco e corredor no rotulo vem do catalogo: escritos a mao ficavam desatualizados.
+function withCatalogPrice(alert: CompatibilityAlert): CompatibilityAlert {
+  const product = getProductById(alert.replacementProductId ?? alert.targetProductId ?? "");
+  if (!product || !alert.fixLabel) return alert;
+  const price = product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return { ...alert, fixLabel: alert.fixLabel.replace(/\(R\$[^)]*\)/, `(${price} · ${product.corridorCode})`) };
 }

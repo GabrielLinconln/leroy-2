@@ -8,6 +8,7 @@ import {
   DynamicProjectList,
   HandoffTicket,
 } from "./types";
+import { corridorOf } from "./storeMap";
 
 export const INITIAL_CONTEXT: ChatContext = {
   step: "start",
@@ -17,7 +18,7 @@ export const INITIAL_CONTEXT: ChatContext = {
   history: [],
 };
 
-function createHandoffTicket(
+export function createHandoffTicket(
   storeId: string,
   department: Department,
   pain: string,
@@ -25,7 +26,8 @@ function createHandoffTicket(
   complexity: "Alta" | "Média" = "Alta"
 ): HandoffTicket {
   const specialist = getSpecialistForDepartment(storeId, department);
-  const shortId = `LM-${Math.floor(1000 + Math.random() * 9000)}`;
+  // 4 digitos aleatorios colidiam com poucas dezenas de chamados no painel
+  const shortId = `LM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const highlights = history.slice(-4);
   return {
     id: shortId,
@@ -80,17 +82,57 @@ function detectFinish(input: string): "fosco" | "acetinado" {
   return "fosco";
 }
 
-function formatTotal(project: DynamicProjectList): string {
+export function formatTotal(project: DynamicProjectList): string {
   const sum = project.items
     .filter((i) => !i.optional)
     .reduce((acc, i) => acc + i.price * i.quantity, 0);
   return sum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+export function buildProductListProject(
+  storeId: string,
+  query: string,
+  specs: Array<{ productId: string; reason?: string }>,
+  sourceIntent: string
+): DynamicProjectList {
+  const items = materializeProjectItems(
+    specs.map((spec) => ({ ...spec, quantity: 1 })),
+    storeId
+  );
+  return {
+    id: `custom-${crypto.randomUUID().slice(0, 8)}`,
+    title: `Seleção para "${query.slice(0, 36)}${query.length > 36 ? "…" : ""}"`,
+    subtitle: `${items.length} produtos encontrados no catálogo da loja`,
+    description: `Itens do catálogo que combinam com o que você descreveu, com corredor, prateleira e estoque da loja.`,
+    storeId,
+    difficulty: "Fácil",
+    estimatedInstallMin: 20,
+    sourceIntent,
+    items,
+    tutorial: [
+        {
+          step: 1,
+          title: "Confira as medidas e especificações na prateleira",
+          detail: "Use a localização exata de corredor e módulo na lista para comparar bitolas, voltagem ou rendimento na embalagem.",
+          durationMin: 3,
+        },
+        {
+          step: 2,
+          title: "Se precisar de apoio técnico, chame um especialista",
+          detail: "Em qualquer momento do chat você pode clicar em 'Chamar especialista' e levar seu resumo direto ao atendente do setor.",
+          durationMin: 2,
+        },
+      ],
+    createdAt: Date.now(),
+  };
+}
+
 export type CopilotReplyPayload = {
   response: Omit<ChatMessage, "id" | "role" | "timestamp">;
   newContext: ChatContext;
   painTopic?: string;
+  /** Pedido que o catalogo nao atendeu, para o painel da loja. */
+  unmet?: string;
 };
 
 /**
@@ -98,6 +140,36 @@ export type CopilotReplyPayload = {
  * Suporta múltiplos domínios, cálculo dinâmico de medidas, busca semântica aberta
  * e abertura real de ticket de Handoff Humano com resumo da conversa.
  */
+const QUICK_PRESETS: Array<[RegExp, string]> = [
+  [/rejunt/, "refazer-rejunte"],
+  [/(portao|grade|gradil).*(ferro|pint|ferrug)|(pint|ferrug).*(portao|grade|gradil)/, "pintar-portao"],
+  [/descarga|nao para de encher|caixa acoplada.*(vaza|enche|escorr)|(vaza|escorr).*caixa acoplada/, "reparo-caixa-acoplada"],
+  [/entup/, "desentupir-pia"],
+];
+
+export const RISKS = ["nenhum", "eletrica", "gas", "estrutura", "altura"] as const;
+export type Risk = (typeof RISKS)[number];
+
+// Regras de dominio aplicadas no codigo, independentes do modelo.
+const RISK_PATTERNS: Array<[Risk, RegExp]> = [
+  ["gas", /\bgas\b|botijao|fogao|aquecedor a gas/],
+  ["eletrica", /chuveiro|tomada|disjuntor|fiacao|\bfios?\b|choque|interruptor|resistencia|eletric|lampada|plafon/],
+  ["estrutura", /viga|pilar|\blaje\b|estrutural|derrubar parede|rachadura grande|trinca grande/],
+  ["altura", /telhado|forro|andaime|fachada|escada alta/],
+];
+
+export const SAFETY_NOTES: Record<Exclude<Risk, "nenhum">, string> = {
+  gas: "**Gás não é serviço para fazer sozinho.** Se sentir cheiro, feche o registro, abra as janelas, não acione interruptores e chame a distribuidora ou um técnico credenciado.",
+  eletrica: "**Segurança:** desligue o disjuntor do circuito e confirme com a chave de teste antes de mexer. Fio derretido, cheiro de queimado ou disjuntor desarmando de novo pedem um eletricista.",
+  estrutura: "**Segurança:** trinca larga, em diagonal ou que volta pode ser estrutural. Antes de esconder com massa, vale a avaliação de um engenheiro.",
+  altura: "**Segurança:** trabalho em altura pede escada firme e alguém junto. Acima de 2 m, prefira um profissional.",
+};
+
+export function detectRisk(message: string): Risk {
+  const n = normalizeText(message);
+  return RISK_PATTERNS.find(([, re]) => re.test(n))?.[0] ?? "nenhum";
+}
+
 export function processCopilotMessage(
   rawInput: string,
   context: ChatContext
@@ -114,9 +186,13 @@ export function processCopilotMessage(
   };
 
   // Atalho global: chamar vendedor especialista a qualquer momento
-  if (/(chamar|falar com|preciso de|quero um).*(vendedor|especialista|atendente|humano)|^chamar vendedor$|^falar com especialista$/.test(n)) {
+  if (/\b(chama|chamar|falar com|preciso de|quero um)\b.*(vendedor|especialista|atendente|humano|tecnico|eletricista|encanador|pessoa|alguem)|^chamar vendedor$|^falar com especialista$/.test(n)) {
     const dept: Department =
-      newCtx.intent === "torneira"
+      /eletric/.test(n)
+        ? "Elétrica"
+        : /hidraul|encanador/.test(n)
+        ? "Hidráulica"
+        : newCtx.intent === "torneira"
         ? "Hidráulica"
         : newCtx.intent === "pintura"
         ? "Tintas"
@@ -134,7 +210,7 @@ export function processCopilotMessage(
     return {
       painTopic: "Handoff Especialista",
       response: {
-        text: `Combinado! Acionei **${ticket.specialistName}** (${ticket.specialistRole}), que está próximo ao corredor **${ticket.aisle}**.\n\nO resumo da nossa conversa já apareceu no painel dele (ticket **${ticket.id}**) — assim você não precisa repetir nada.`,
+        text: `Combinado! Acionei **${ticket.specialistName}** (${ticket.specialistRole}), que está próximo ao corredor **${corridorOf(ticket.aisle)}**.\n\nO resumo da nossa conversa já apareceu no painel dele (ticket **${ticket.id}**) — assim você não precisa repetir nada.`,
         handoffTicket: ticket,
         suggestions: ["Resolver outro projeto", "Ver catálogo da loja"],
       },
@@ -142,8 +218,18 @@ export function processCopilotMessage(
     };
   }
 
+  // Gas nunca vira lista de compras, em nenhuma etapa da conversa.
+  if (detectRisk(input) === "gas") {
+    newCtx.step = "start";
+    return {
+      painTopic: "Gás",
+      response: { text: SAFETY_NOTES.gas, suggestions: ["Chamar especialista", "Resolver outro projeto"] },
+      newContext: newCtx,
+    };
+  }
+
   // Reinício explícito
-  if (/^(outro projeto|resolver outro|comecar de novo|novo projeto|voltar ao inicio)$/.test(n)) {
+  if (/^(resolver outro( projeto)?|outro projeto|comecar de novo|novo projeto|voltar ao inicio)$/.test(n)) {
     newCtx.step = "start";
     newCtx.intent = null;
     newCtx.details = {};
@@ -344,6 +430,21 @@ export function processCopilotMessage(
     };
   }
 
+  // Oferecido depois do chamado de trinca grande.
+  if (/lista preventiva/.test(n)) {
+    const project = getPresetProject("reparo-trinca", storeId)!;
+    newCtx.step = "start";
+    return {
+      painTopic: "Trinca / Infiltração",
+      response: {
+        text: `Esta é a lista do reparo superficial (**${formatTotal(project)}**). Use só depois da avaliação do especialista: se a trinca for estrutural, a massa esconde o problema.`,
+        actionProject: project,
+        suggestions: ["Resolver outro projeto"],
+      },
+      newContext: newCtx,
+    };
+  }
+
   // 3. Fluxo TRINCA / INFILTRAÇÃO / MOFO
   if (context.step === "trinca:tamanho") {
     if (/mais de 30|grande|profund|estrutur|abert|viga|pilar/.test(n)) {
@@ -358,7 +459,7 @@ export function processCopilotMessage(
       return {
         painTopic: "Trinca / Infiltração",
         response: {
-          text: `Trincas maiores que 30cm ou profundas pedem avaliação técnica para não mascarar infiltração ou movimentação estrutural.\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${ticket.aisle}**) com o resumo da nossa conversa (ticket **${ticket.id}**).`,
+          text: `Trincas maiores que 30cm ou profundas pedem avaliação técnica para não mascarar infiltração ou movimentação estrutural.\n\nAcionei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${corridorOf(ticket.aisle)}**) com o resumo da nossa conversa (ticket **${ticket.id}**).`,
           handoffTicket: ticket,
           suggestions: ["Ver lista preventiva mesmo assim", "Resolver outro projeto"],
         },
@@ -417,7 +518,7 @@ export function processCopilotMessage(
       return {
         painTopic: "Elétrica / Chuveiro",
         response: {
-          text: `Segurança em primeiro lugar! Quando há aquecimento de fio ou queda recorrente do disjuntor, nosso técnico precisa dimensionar cabo e amperagem.\n\nChamei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${ticket.aisle}**) — ticket **${ticket.id}**.`,
+          text: `Segurança em primeiro lugar! Quando há aquecimento de fio ou queda recorrente do disjuntor, nosso técnico precisa dimensionar cabo e amperagem.\n\nChamei **${ticket.specialistName}** (${ticket.specialistRole}, corredor **${corridorOf(ticket.aisle)}**) — ticket **${ticket.id}**.`,
           handoffTicket: ticket,
         },
         newContext: newCtx,
@@ -431,7 +532,7 @@ export function processCopilotMessage(
       response: {
         text: `Beleza! Se o chuveiro liga mas sai água fria, em 90% das vezes é só a **resistência rompida**.\n\nMontei o kit seguro (**${formatTotal(
           project
-        )}**) já com **conector Wago 32A** (evita emenda derretida) e **tutorial com alerta do disjuntor**.`,
+        )}**) já com **conector de emenda Wago** (evita emenda derretida) e **tutorial com alerta do disjuntor**.`,
         actionProject: project,
       },
       newContext: newCtx,
@@ -439,6 +540,43 @@ export function processCopilotMessage(
   }
 
   // ================= DETECÇÃO DE INTENÇÃO INICIAL =================
+
+  // Projetos prontos com gatilho direto (antes das intencoes genericas que os capturariam).
+  const quick = QUICK_PRESETS.find(([re]) => re.test(n));
+  if (quick) {
+    const project = getPresetProject(quick[1], storeId)!;
+    return {
+      painTopic: project.title,
+      response: {
+        text: `Montei o projeto **${project.title}** (**${formatTotal(project)}**) com os itens certos e o passo a passo.`,
+        actionProject: project,
+      },
+      newContext: newCtx,
+    };
+  }
+
+  if (/tomada/.test(n) && !/chuveiro|esquent|queim|faisc|choque|derret/.test(n)) {
+    const project = buildProductListProject(
+      storeId,
+      input,
+      [
+        { productId: "ele-tomada", reason: "Tomada nova no padrão brasileiro" },
+        { productId: "ele-chave-teste", reason: "Confirma que a energia está desligada" },
+        { productId: "ele-fita-isolante", reason: "Isola as pontas dos fios" },
+        { productId: "fer-chave-fenda", reason: "Solta e fixa os parafusos da tomada" },
+      ],
+      "eletrica"
+    );
+    return {
+      painTopic: "Tomada",
+      response: {
+        text: `Separei a **tomada nova** e os itens para trocar com segurança (**${formatTotal(project)}**).\n\n${SAFETY_NOTES.eletrica}`,
+        actionProject: project,
+        suggestions: ["Chamar técnico de elétrica", "Resolver outro projeto"],
+      },
+      newContext: newCtx,
+    };
+  }
 
   // A. Torneira / Vazamento / Sifão
   if (/torneira|pinga|vazand|vazamento|gotej|sifao|borrachinha|carrapeta/.test(n)) {
@@ -567,7 +705,7 @@ export function processCopilotMessage(
       return {
         painTopic: "Instalar prateleira",
         response: {
-          text: `Para parede de **drywall**, a bucha comum espanaria — selecionei buchas especiais borboleta + suportes reforçados + nível (**${formatTotal(
+          text: `Para parede de **drywall**, a bucha comum espanaria — selecionei buchas próprias para drywall + suportes reforçados + nível (**${formatTotal(
             project
           )}**).`,
           actionProject: project,
@@ -615,7 +753,7 @@ export function processCopilotMessage(
       response: {
         text: `Montei um kit de **Iluminação LED** (**${formatTotal(
           project
-        )}**) com painel 18W luz neutra 4000K (economiza até 85% de energia), itens de segurança elétrica e passo a passo de instalação.`,
+        )}**) com painel LED 18W de luz branca (gasta bem menos energia), itens de segurança elétrica e passo a passo de instalação.`,
         actionProject: project,
       },
       newContext: newCtx,
@@ -625,44 +763,19 @@ export function processCopilotMessage(
   // ================= BUSCA SEMÂNTICA ABERTA (QUALQUER OUTRA PERGUNTA) =================
   const matches = semanticSearchCatalog(input, storeId, { limit: 4 });
   if (matches.length > 0) {
-    const dynamicId = `custom-${Date.now().toString(36)}`;
-    const customProject: DynamicProjectList = {
-      id: dynamicId,
-      title: `Seleção para "${input.slice(0, 36)}${input.length > 36 ? "…" : ""}"`,
-      subtitle: `${matches.length} produtos encontrados por busca semântica`,
-      description: `Traduzi sua busca em linguagem natural para os itens técnicos correspondentes no catálogo da loja, já com corredor, prateleira e estoque ao vivo.`,
+    const customProject = buildProductListProject(
       storeId,
-      difficulty: "Fácil",
-      estimatedInstallMin: 20,
-      sourceIntent: "busca-semantica",
-      items: materializeProjectItems(
-        matches.map((m) => ({
-          productId: m.product.id,
-          quantity: 1,
-          reason: `Correspondência semântica ${m.score}% (${m.matchedTerms.slice(0, 2).join(", ")})`,
-        })),
-        storeId
-      ),
-      tutorial: [
-        {
-          step: 1,
-          title: "Confira as medidas e especificações na prateleira",
-          detail: "Use a localização exata de corredor e módulo na lista para comparar bitolas, voltagem ou rendimento na embalagem.",
-          durationMin: 3,
-        },
-        {
-          step: 2,
-          title: "Se precisar de apoio técnico, chame um especialista",
-          detail: "Em qualquer momento do chat você pode clicar em 'Chamar especialista' e levar seu resumo direto ao atendente do setor.",
-          durationMin: 2,
-        },
-      ],
-      createdAt: Date.now(),
-    };
+      input,
+      matches.map((m) => ({
+        productId: m.product.id,
+        reason: `Combina com: ${m.matchedTerms.slice(0, 2).join(", ")}`,
+      })),
+      "busca-semantica"
+    );
 
     const topNames = matches
       .slice(0, 3)
-      .map((m) => `• **${m.product.name}** — corredor **${m.product.aisle}** (${m.inStock ? `${m.stockQty} un.` : "sem estoque"})`)
+      .map((m) => `• **${m.product.name}** — corredor **${m.product.corridorCode}** (${m.inStock ? `${m.stockQty} un.` : "sem estoque"})`)
       .join("\n");
 
     return {
@@ -679,6 +792,7 @@ export function processCopilotMessage(
 
   return {
     painTopic: "Dúvida geral",
+    unmet: input.slice(0, 80),
     response: {
       text: "Ainda não encontrei um projeto exato para essa frase. Pode me contar **o que aconteceu ou o que você quer instalar/reformar** — ou enviar uma **foto** pelo botão da câmera?",
       suggestions: [
