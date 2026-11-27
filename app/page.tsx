@@ -361,7 +361,7 @@ export default function StoreModeHomePage() {
         <div className="container-wide flex flex-wrap items-center justify-between gap-2 text-[12px] text-signage-subtle">
           <span>
             <strong className="font-semibold text-signage">LM Copiloto</strong> ·{" "}
-            {activeStore.name} · Challenge FIAP 2026 (Tech_01)
+            {activeStore.name} · Challenge FIAP 2026 (Tech_01) · Protótipo: preços de referência, estoque e planta ilustrativos
           </span>
           <div className="flex items-center gap-4">
             <Link href="/catalogo" className="hover:text-signage">
