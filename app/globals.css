@@ -51,7 +51,7 @@
   .btn-accent {
     @apply inline-flex items-center justify-center gap-2 rounded-lg bg-leroy px-5 py-3
            text-[13.5px] font-bold tracking-tight text-signage transition
-           hover:bg-leroy-dark hover:text-white active:translate-y-[0.5px] disabled:pointer-events-none disabled:opacity-40;
+           hover:bg-leroy-deep hover:text-white active:translate-y-[0.5px] disabled:pointer-events-none disabled:opacity-40;
   }
 
   /* Placa de corredor estilo sinalização aérea Leroy Merlin */

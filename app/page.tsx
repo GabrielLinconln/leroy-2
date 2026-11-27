@@ -61,6 +61,14 @@ const QUICK_SCENARIOS = [
   },
 ];
 
+const COMMON_REQUESTS = [
+  "Pia entupida",
+  "Descarga não para de encher",
+  "Rejunte do box mofado",
+  "Portão de ferro enferrujado",
+  "Porta rangendo",
+];
+
 const FEATURED_PRODUCT_IDS = [
   "hid-torneira-mono",
   "fer-furadeira",
@@ -129,7 +137,7 @@ export default function StoreModeHomePage() {
             <span className="h-2 w-2 rounded-full bg-leroy" />
             <MapPinIcon size={12} className="text-leroy" />
             <span className="truncate">
-              {activeStore.name} · {activeStore.address}
+              Você está na <strong className="font-semibold text-white">{activeStore.name}</strong> · {activeStore.address}
             </span>
           </div>
 
@@ -181,6 +189,20 @@ export default function StoreModeHomePage() {
               </button>
             </div>
           </form>
+
+          <div role="group" aria-labelledby="pedidos-comuns" className="mt-3 flex max-w-[780px] flex-wrap items-center gap-2">
+            <span id="pedidos-comuns" className="text-[12px] text-white/60">Pedidos comuns:</span>
+            {COMMON_REQUESTS.map((req) => (
+              <button
+                key={req}
+                type="button"
+                onClick={() => launchQuery(req)}
+                className="inline-flex min-h-[44px] items-center rounded-md border border-white/20 px-3 text-[12.5px] font-medium text-white/85 transition hover:border-leroy hover:text-leroy"
+              >
+                {req}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
